@@ -91,7 +91,7 @@ class MCCmd2Bdx:
         delay=0,
         conditional=False,
     ):
-        assert type(xDir) == type(yDir) == type(zDir) == int
+        assert type(xDir) == type(yDir) == type(zDir) == int  # noqa: E721
         self.canvas.place_command_block_with_data(
             xDir,
             yDir,
