@@ -4,3 +4,4 @@ execute as @e[tag=npc] at @s run replaceitem entity @s slot.armor.chest 0 keep m
 # #(连锁)#[2]
 execute as @e[tag=npc,hasitem={location=slot.armor.chest,item=leather_chestplate}] at @s run setblock ~~-2~ minecraft:redstone_block
 execute as @e[tag=npc,hasitem={location=slot.armor.chest,item=leather_chestplate}] at @s run replaceitem entity @s slot.armor.chest 0 minecraft:iron_chestplate 1 1000
+playsound random.explode @s

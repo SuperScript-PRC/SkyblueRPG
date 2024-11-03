@@ -10,3 +10,4 @@ scoreboard objectives add sr:mh_weapon dummy
 # 玩家
 scoreboard objectives add sr:skillmode dummy
 scoreboard objectives add sr:pl_hp dummy
+scoreboard objectives add sr:food_model dummy
