@@ -14,3 +14,5 @@ execute as @a[tag=sr.hurted] at @s if entity @e[r=5,tag=sr.mob,type=!player] run
 execute as @e[tag=sr.mob] unless entity @s[hasitem={item=leather_helmet,location=slot.armor.head}] run tag @s add sr.hurted
 execute as @e[tag=sr.hurted,tag=sr.mob] at @s if entity @a[r=10,tag=sr.player_atk] run tellraw @a[tag=sr.rpg_bot] {"rawtext":[{"text":"sr.player.attack.mob"},{"selector":"@a[c=1]"},{"score":{"name":"@s","objective":"sr:ms_uuid"}}]}
 replaceitem entity @e[tag=sr.hurted] slot.armor.head 0 minecraft:leather_helmet 1 1000 {"item_lock":{"mode": "lock_in_slot"},"keep_on_death":{}}
+execute as @a[tag=sr.player_atk] at @s unless entity @e[tag=sr.hurted,tag=sr.mob,r=10] run tellraw @a[tag=sr.rpg_bot] {"rawtext":[{"text":"sr.player.use.weapon"},{"selector":"@s"}]}
+replaceitem entity @e[tag=sr.hurted] slot.armor.head 0 minecraft:leather_helmet 1 1000 {"item_lock":{"mode": "lock_in_slot"},"keep_on_death":{}}

@@ -11,3 +11,4 @@ scoreboard objectives add sr:mh_weapon dummy
 scoreboard objectives add sr:skillmode dummy
 scoreboard objectives add sr:pl_hp dummy
 scoreboard objectives add sr:food_model dummy
+scoreboard objectives add sr:food_count dummy
