@@ -1,2 +1,5 @@
+.vscode/
+
 *.bdx
-*.json
+
+launch.json

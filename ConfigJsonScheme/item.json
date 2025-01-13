@@ -1,0 +1,17 @@
+{
+    "type": "object",
+    "properties": {
+        "显示名": {
+            "type": "string",
+            "description": "物品对玩家显示的名字。"
+        },
+        "星级": {
+            "type": "integer",
+            "description": "物品显示的星级, 范围为 1~5。"
+        },
+        "描述": {
+            "type": "string",
+            "description": "物品显示的描述。"
+        }
+    }
+}
