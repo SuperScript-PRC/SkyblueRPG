@@ -16,3 +16,5 @@ tag @a[tag=sr.shifted1,tag=!sr.shifting1] remove sr.shifted1
 execute as @a[tag=sr.shifting,tag=!sr.shifted1] run tellraw @a[tag=sr.rpg_bot] {"rawtext":[{"text":"sr.switch.shifting"},{"selector":"@s"}]}
 # #[1]
 tag @a[tag=sr.shifting1,tag=!sr.shifted1] add sr.shifted1
+
+playanimation FSkyBlueBot animation.piglin.hand.attack "" 5
