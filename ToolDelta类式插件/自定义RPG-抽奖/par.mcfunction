@@ -1,0 +1,1 @@
+particle minecraft:blue_flame_particle

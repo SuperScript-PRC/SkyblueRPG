@@ -1,0 +1,342 @@
+import os
+import time
+import traceback
+import importlib
+import threading
+from typing import Callable  # noqa: UP035
+from tooldelta import (
+    cfg,
+    fmts,
+    game_utils,
+    Plugin,
+    Player,
+    utils,
+    plugin_entry,
+    TYPE_CHECKING,
+)
+from . import (
+    backpack_holder,
+    display_holder,
+    path_holder,
+    player_holder,
+    mob_holder,
+    entity_holder,
+    item_holder,
+    combat_handler,
+    menu_cmds,
+    snowball_gui,
+)
+from .rpg_lib import (
+    constants,
+    default_cfg,
+    event_apis,
+    formatter,
+    utils as rpg_utils,
+    scripts_loader,
+)
+from .rpg_lib.init_datas import init_scoreboards
+from .rpg_lib.frame_effects import find_effect_class
+from .rpg_lib.lib_rpgitems import (
+    ItemWeapon,
+    ItemRelic,
+)
+from .rpg_lib.frame_objects import (
+    find_weapon_class,
+    find_relic_class,
+)
+from .rpg_lib.rpg_entities import (
+    PlayerEntity,
+)
+# 虚拟护甲/饰品词条命名方式:
+# 数值: XXX
+# 数值提升(0~1): XXX+加成
+# 攻击力; 攻击力加成
+# 防御力; 防御力加成
+# 充能效率
+# 暴击率; 暴击伤害
+# 生命值; 生命提升
+# 效果命中; 效果抵抗
+
+importlib.reload(scripts_loader)
+
+for module in (
+    backpack_holder,
+    display_holder,
+    path_holder,
+    player_holder,
+    mob_holder,
+    entity_holder,
+    item_holder,
+    combat_handler,
+    menu_cmds,
+    snowball_gui,
+):
+    importlib.reload(module)
+
+RPG_Lock = threading.RLock()
+
+
+class CustomRPG(Plugin):
+    name = "自定义RPG"
+    author = "SuperScript"
+    version = (0, 0, 1)
+
+    class Types:
+        AllElemTypes = tuple(f"属性{i}" for i in range(1, 8))
+        # WEAPON = "武器:剑"
+        SUPPORT_UPGRADE = (
+            constants.WeaponType.SWORD,
+            constants.RelicType.HELMET,
+            constants.RelicType.CHESTPLATE,
+            constants.RelicType.LEGGINGS,
+            constants.RelicType.BOOTS,
+            constants.RelicType.A,
+            constants.RelicType.B,
+            constants.RelicType.C,
+            constants.RelicType.D,
+        )
+
+    constants = constants
+    event_apis = event_apis
+    formatter = formatter
+
+    find_effect_class = staticmethod(find_effect_class)
+    find_weapon_class = staticmethod(find_weapon_class)
+    find_relic_class = staticmethod(find_relic_class)
+    PlayerEntity = PlayerEntity
+    ItemWeapon = ItemWeapon
+    ItemRelic = ItemRelic
+    # 怪物死亡给予的充能值
+    MOB_DEATH_CHARGE = 5
+
+    def __init__(self, frame):
+        global SYSTEM
+        SYSTEM = self
+        rpg_utils.set_system(self)
+        super().__init__(frame)
+        self.cfg, _ = cfg.get_plugin_config_and_version(
+            "蔚蓝自定义RPG系统",
+            default_cfg.get_basic_cfg_standard(),
+            default_cfg.get_basic_cfg_default(),
+            (0, 0, 1),
+        )
+        self.elements: dict[str, str] = self.cfg["基本属性名称"]
+        self.element_colors: dict[str, str] = {
+            k: v[:2] for k, v in self.cfg["基本属性名称"].items()
+        }
+        self.star_light = self.cfg["星级显示"]["亮"]
+        self.star_dark = self.cfg["星级显示"]["暗"]
+        for dirname in (
+            "玩家基本数据",
+            "材料物品配置",
+        ):
+            os.makedirs(os.path.join(self.data_path, dirname), exist_ok=True)
+        self.ListenPreload(self.on_def)
+        self.ListenActive(self.on_inject)
+        self.ListenPlayerJoin(self.on_player_join)
+        self.ListenPlayerLeave(self.on_player_leave)
+        self.ListenFrameExit(self.on_frame_exit)
+
+    def on_def(self):
+        fmts.print_inf("§bSkyblueRPG 加载提示: ")
+        fmts.print_inf("§b本插件需要配合CustomRPG.bdx 使用!")
+        self.menu = self.GetPluginAPI("聊天栏菜单", (0, 0, 1))
+        self.ntag = self.GetPluginAPI("头衔系统")
+        self.tutor = self.GetPluginAPI("自定义RPG-教程")
+        self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
+        self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
+        self.snowmenu = self.GetPluginAPI("雪球菜单v3", (0, 0, 1))
+        self.backpack = self.GetPluginAPI("虚拟背包")
+        self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
+        if TYPE_CHECKING:
+            global SlotItem, Item
+            from ..前置_聊天栏菜单 import ChatbarMenu
+            from ..前置_大字替换 import BigCharReplace
+            from ..前置_Cb2Bot通信 import TellrawCb2Bot
+            from ..雪球菜单v3 import SnowMenuV3
+            from ..自定义RPG_升级系统 import CustomRPGUpgrade
+            from ..自定义RPG_教程 import CustomRPGTutorial
+            from ..虚拟背包 import VirtuaBackpack
+            from ..头衔系统 import Nametitle
+
+            self.menu: ChatbarMenu
+            self.ntag: Nametitle
+            self.tutor: CustomRPGTutorial
+            self.cb2bot: TellrawCb2Bot
+            self.bigchar: BigCharReplace
+            self.snowmenu: SnowMenuV3
+            self.backpack: VirtuaBackpack
+            self.rpg_upgrade: CustomRPGUpgrade
+        SlotItem = self.backpack.SlotItem
+        Item = self.backpack.Item
+
+        self.backpack_holder = backpack_holder.BackpackHolder(self)
+        self.display_holder = display_holder.DisplayHolder(self)
+        self.path_holder = path_holder.PathHolder(self)
+        self.player_holder = player_holder.PlayerHolder(self)
+        self.mob_holder = mob_holder.MobHolder(self)
+        self.entity_holder = entity_holder.EntityHolder(self)
+        self.item_holder = item_holder.ItemHolder(self)
+        self.combat_handler = combat_handler.CombatHandler(self)
+        self.menu_cmds = menu_cmds.MenuCommands(self)
+        self.menu_gui = snowball_gui.CustomRPGGUI(self)
+        scripts_loader.load_all(self)
+        self.item_holder.init()
+
+        # self.cb2bot.regist_message_cb(
+        #     r"sr.nearest.entities", self.handle_nearest_entities_cb
+        # )
+
+    def on_inject(self):
+        self.game_ctrl.sendcmd("/tag @s add sr.rpg_bot")
+        self.game_ctrl.sendwocmd("/gamerule sendcommandfeedback false")
+        self.frame.add_console_cmd_trigger(
+            ["srinit"], None, "初始化 RPG 计分板", lambda _: init_scoreboards()
+        )
+        self.mob_holder.activate()
+        self.entity_holder.activate()
+        self.display_holder.activate()
+        self.combat_handler.activate()
+        self.menu_cmds.prepare_chatbarmenu()
+        self.menu_gui.enable_snowmenu()
+        self.init_need_init_cmds()
+        with RPG_Lock:
+            try:
+                for player in self.game_ctrl.players:
+                    self.init_game_player(player)
+            except Exception:
+                fmts.print_err(traceback.format_exc())
+            self.print("§a玩家数据均已初始化")
+
+    def on_player_join(self, player: Player):
+        # if not game_utils.is_op(player):
+        #    self.game_ctrl.sendwocmd(f"kick {player.xuid} §c未处于白名单内")
+        with RPG_Lock:
+            self.init_game_player(player)
+            basic = self.player_holder.get_player_basic(player)
+            weapon_uuid = basic.mainhand_weapons_uuid[0]
+            titl = self.ntag.get_current_nametitle(player.name)
+            if titl is None:
+                format_title_text = ""
+            else:
+                format_title_text = (
+                    "§f『" + self.ntag.get_titles().get(titl, "???") + "§r§f』 "
+                )
+            if weapon_uuid is None:
+                format_weapon_txt = ""
+            else:
+                weapon_item = self.backpack_holder.getItem(player, weapon_uuid)
+                assert weapon_item
+                format_weapon_txt = f"提着 {weapon_item.item.show_name} "
+            format_level_text = (
+                "§7<§f"
+                + self.bigchar.replaceBig("Lv.")
+                + "§a"
+                + self.bigchar.replaceBig(str(basic.Level))
+                + "§7>"
+            )
+            self.show_any(
+                "@a",
+                "a",
+                f"{format_level_text} {format_title_text}§e{player.name}§f {format_weapon_txt}§r§a上线了",
+            )
+
+    def on_player_leave(self, player: Player):
+        with RPG_Lock:
+            self.unload_player(player)
+
+    def on_frame_exit(self, _):
+        for player in self.frame.get_players().getAllPlayers():
+            self.player_holder.remove_player(player)
+        fmts.print_suc("自定义RPG: 全部数据已保存")
+
+    ##### 事件初始化 #####
+    @utils.thread_func("初始化 SkyblueRPG系统")
+    def init_need_init_cmds(self):
+        for cmd in [f'/tag "{self.game_ctrl.bot_name}" add sr.rpg_bot']:
+            time.sleep(0.05)
+            self.game_ctrl.sendwocmd(cmd)
+        try:
+            self.all_bots = game_utils.getTarget("@a[tag=sr.rpg_bot]")
+        except Exception:
+            self.all_bots = []
+            self.print("无法获取 RPG 机器人列表")
+        fmts.print_suc("SkyblueRPG 初始化成功.")
+
+    # 初始化玩家数据
+    def init_game_player(self, player: Player):
+        playerinf = self.player_holder.add_player(player)
+        if playerinf.weapon:
+            self.game_ctrl.sendwocmd(
+                r"replaceitem entity @a[name="
+                + player.name
+                + r'] slot.hotbar 1 iron_ingot 1 755 {"item_lock":{"mode":"lock_in_slot"}}'
+            )
+        self.game_ctrl.sendwocmd(
+            f"scoreboard players set {player.safe_name} sr:skillmode 0"
+        )
+        fmts.print_suc(f"玩家已加载: {player.name}")
+
+    # 玩家退出处理
+    def unload_player(self, player: Player):
+        if basic := self.player_holder.loaded_player_basic_data.get(player):
+            weapon_uuid = basic.mainhand_weapons_uuid[0]
+            if weapon_uuid is None:
+                format_weapon_txt = ""
+            else:
+                weapon_item = self.backpack_holder.getItem(player, weapon_uuid)
+                assert weapon_item
+                format_weapon_txt = f"提着 {weapon_item.item.show_name} "
+            titl = self.ntag.get_current_nametitle(player.name)
+            if titl is None:
+                format_title_text = ""
+            else:
+                format_title_text = (
+                    "§f『" + self.ntag.get_titles().get(titl, "???") + "§r§f』 "
+                )
+            format_level_text = (
+                "§7<§f"
+                + self.bigchar.replaceBig("Lv.")
+                + "§a"
+                + self.bigchar.replaceBig(str(basic.Level))
+                + "§7>"
+            )
+            self.show_any(
+                "@a",
+                "6",
+                f"{format_level_text} {format_title_text}{player.name} {format_weapon_txt}§r§6下线了",
+            )
+        else:
+            fmts.print_war(f"玩家 {player.name} 没有被加载到 SkyblueRPG")
+        self.player_holder.remove_player(player)
+
+    def show_succ(self, player: Player, msg):
+        player.show(f"§a┃ {msg}")
+
+    def show_warn(self, player: Player, msg):
+        player.show(f"§6┃ {msg}")
+
+    def show_fail(self, player: Player, msg):
+        player.show(f"§c┃ {msg}")
+
+    def show_inf(self, player: Player, msg):
+        player.show(f"§7┃ §f{msg}")
+
+    def show_any(self, target: str | Player, prefix_color_id: str, msg: str):
+        if isinstance(target, Player):
+            target = target.name
+        self.game_ctrl.say_to(target, f"§{prefix_color_id}┃ {msg}")
+
+    def add_weapon_use_listener(
+        self, weapon_id: str, listener: Callable[[PlayerEntity], None]
+    ):
+        self.combat_handler.weapon_use_listener[weapon_id] = listener
+
+    def getPlayer(self, playername: str):
+        p = self.frame.get_players().getPlayerByName(playername)
+        if p is None:
+            raise ValueError(f"玩家 {playername} 不存在")
+        return p
+
+
+entry = plugin_entry(CustomRPG, "自定义RPG")

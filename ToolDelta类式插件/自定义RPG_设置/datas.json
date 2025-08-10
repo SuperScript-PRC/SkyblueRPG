@@ -1,0 +1,9 @@
+{
+  "author": "SuperScript",
+  "version": "0.0.1",
+  "plugin-type": "classic",
+  "description": "设置RPG项",
+  "pre-plugins": {},
+  "plugin-id": "CPPG-settings",
+  "enabled": true
+}
