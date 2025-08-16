@@ -27,6 +27,7 @@ class PlayerHolder:
         self.player_last_weapon_cd: dict[Player, float] = {}
         # 玩家上一次的武器终结技充能
         self.player_last_weapon_chg: dict[Player, int] = {}
+        self.sys.rpg_settings.add_setting_changed_listener("pvp", self._on_change_pvp_mode)
 
     def add_player(self, player: Player):
         path = self.sys.path_holder.format_player_basic_path(player)
@@ -41,10 +42,14 @@ class PlayerHolder:
             entity := basic_data.to_player_entity_with_orig_crit()
         )
         self._init_player_effects(basic_data, entity, data["Effs"])
+        entity.switch_pvp(bool(self.sys.rpg_settings.get_player_setting(player, "pvp")))
         return entity
 
     # 玩家退出处理
     def remove_player(self, player: Player):
+        if player not in self.player_entities:
+            fmts.print_war(f"玩家 {player.name} 没有被加载到 RPG 系统, 忽略移除")
+            return
         self.save_game_player_data(player)
         self.sys.entity_holder.unload_player(player)
         if player in self.player_entities:
@@ -125,7 +130,7 @@ class PlayerHolder:
             path = self.sys.path_holder.format_player_basic_path(player)
             playerinf = self.get_playerinfo(player)
             self.get_player_basic(player).update_from_player_property(playerinf)
-            self.save_mainhand_weapon_datas(playerinf)
+            self.dump_mainhand_weapon_datas_to_player_basic(playerinf)
             tempjson.load_and_write(path, self.get_player_basic(player).dump())
         else:
             fmts.print_war(f"玩家 {player.name} 没有被加载到 RPG 系统")
@@ -136,7 +141,7 @@ class PlayerHolder:
     def set_player_last_weapon_charge(self, player: PlayerEntity, charge: int):
         self.player_last_weapon_chg[player.player] = charge
 
-    def save_mainhand_weapon_datas(self, playerinf: PlayerEntity):
+    def dump_mainhand_weapon_datas_to_player_basic(self, playerinf: PlayerEntity):
         "将武器数据格式化为可保存内容"
         if (weapon := playerinf.weapon) is None:
             return
@@ -151,7 +156,7 @@ class PlayerHolder:
         assert mainhand_weapon_slot, (
             f"异常: 玩家主手有道具(uuid={mainhand_weapon_uuid}), 实际上背包内没有"
         )
-        # Danger Zone! 需要 mainhand_weapon_slot 不为 _bag 内 SlotItem 的 copy
+        # Danger Zone! 需要 mainhand_weapon_slot 为 _bag 内 SlotItem, 不能为 copy
         item_weapon = ItemWeapon.load_from_item(mainhand_weapon_slot)
         weapon.dump_to_item(item_weapon)
         mainhand_weapon_slot.metadata.update(item_weapon.dump_item().metadata)
@@ -224,6 +229,7 @@ class PlayerHolder:
             crit_add += metadata.get(PROPs.CritDamage, 0) * PVAL.CritAdd
             effect_hit += metadata.get(PROPs.EffectHit, 0) * PVAL.EffectHit
             effect_anti += metadata.get(PROPs.EffectRes, 0) * PVAL.EffectRes
+        # print(rpg_utils.list_multi(defs_add, [defs_add_default] * len(defs_add)))
         playerinf.init_basic(
             atks,
             defs,
@@ -255,3 +261,8 @@ class PlayerHolder:
         self.sys.player_holder.get_player_basic(
             player.player
         ).update_from_player_property(player)
+        player.effects.clear()
+
+    # 监听玩家设置更改 pvp 模式
+    def _on_change_pvp_mode(self, player: Player, mode: int):
+        self.get_playerinfo(player).switch_pvp(bool(mode))

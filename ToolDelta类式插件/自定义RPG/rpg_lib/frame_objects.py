@@ -145,8 +145,8 @@ class Relic:
     description: str = "无描述"
     star_level: STARLEVEL = 3
     category: str = ""
-    suit_2nd_description: str = ""
-    suit_4th_description: str = ""
+    suit_2nd_description: str = "无"
+    suit_4th_description: str = "无"
     types: tuple[RelicType, ...]
     upgrade_mode: "UpgradeConfigRelic | None" = None
     "升级方法"

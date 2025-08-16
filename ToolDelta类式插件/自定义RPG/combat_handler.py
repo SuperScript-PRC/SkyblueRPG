@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from tooldelta import fmts, utils, InternalBroadcast, Player
-from .rpg_lib import constants, event_apis
+from tooldelta import fmts, utils, Player
+from . import event_apis
+from .rpg_lib import constants
 from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, ENTITY
 
 if TYPE_CHECKING:
@@ -149,6 +150,12 @@ class CombatHandler:
 
     # 玩家攻击玩家
     def player_attack_player(self, playerinf: PlayerEntity, playerinf_2: PlayerEntity):
+        if not playerinf.pvp:
+            playerinf.player.setActionbar("§4✗ §c无法攻击玩家， 请在菜单设置内打开 PVP 模式")
+            return
+        elif not playerinf_2.pvp:
+            playerinf.player.setActionbar("§4✗ §c对方未开启 PVP 模式， 可在菜单设置内打开")
+            return
         playerinf.attack(playerinf_2)
         self.entity_holder.update_last_hp(playerinf)
         self.entity_holder.update_last_hp(playerinf_2)
@@ -163,20 +170,23 @@ class CombatHandler:
                     self.sys.tutor.check_point(
                         "自定义RPG:击杀生物", killer.player, killed
                     )
-                    evt = event_apis.PlayerKillMobEvent(killer, killed)
-                    self.BroadcastEvent(InternalBroadcast(evt.type, evt))
+                    self.BroadcastEvent(
+                        event_apis.PlayerKillMobEvent(killer, killed).to_broadcast()
+                    )
                 elif isinstance(killed, PlayerEntity):
                     self.sys.tutor.check_point(
                         "自定义RPG:击杀玩家", killer.player, killed
                     )
-                    evt = event_apis.PlayerKillPlayerEvent(killer, killed)
-                    self.BroadcastEvent(InternalBroadcast(evt.type, evt))
+                    self.BroadcastEvent(
+                        event_apis.PlayerKillPlayerEvent(killer, killed).to_broadcast()
+                    )
                     killed.recover()
         elif isinstance(killer, MobEntity):
             if killed.is_died():
                 if isinstance(killed, PlayerEntity):
-                    evt = event_apis.MobKillPlayerEvent(killed, killer)
-                    self.BroadcastEvent(InternalBroadcast(evt.type, evt))
+                    self.BroadcastEvent(
+                        event_apis.MobKillPlayerEvent(killed, killer).to_broadcast()
+                    )
                     killed.recover()
 
     # 处理玩家设置技能

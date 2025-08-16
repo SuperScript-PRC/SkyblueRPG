@@ -58,7 +58,7 @@ class CustomRPGGUI:
         items: list["SlotItem | None"] = []
         items_hs = {}
         self.game_ctrl.sendwscmd(f"/execute as {player.safe_name} at @s run tp ~~~ ~ 0")
-        self.sys.player_holder.save_mainhand_weapon_datas(
+        self.sys.player_holder.dump_mainhand_weapon_datas_to_player_basic(
             self.sys.player_holder.get_playerinfo(player)
         )
         try:
@@ -115,7 +115,7 @@ class CustomRPGGUI:
                         changable_items = (
                             self.sys.backpack_holder.list_player_store_with_filter(
                                 player,
-                                [i.to_full_category() for i in constants.WeaponType],
+                                [i.to_category() for i in constants.WeaponType],
                             )
                         )
                         if changable_items == []:
@@ -221,10 +221,7 @@ class CustomRPGGUI:
                                 ]
                                 changable_items = self.sys.backpack_holder.list_player_store_with_filter(
                                     player,
-                                    [
-                                        i.to_full_category()
-                                        for i in constants.WeaponType
-                                    ],
+                                    [i.to_category() for i in constants.WeaponType],
                                     [item_sel.uuid],
                                 )
                                 if changable_items == []:
@@ -381,7 +378,7 @@ class CustomRPGGUI:
                         return None
                     empty = "§7空"
                     a0 = shead.item.show_name if shead else empty
-                    a1 = shead.item.show_name if shead else empty
+                    a1 = schest.item.show_name if schest else empty
                     a2 = slegs.item.show_name if slegs else empty
                     a3 = sfeet.item.show_name if sfeet else empty
                     a4 = slA.item.show_name if slA else empty
@@ -602,7 +599,6 @@ class CustomRPGGUI:
         display_column_cb: Callable[["SlotItem"], str] = lambda x: "- "
         + x.item.show_name,
     ) -> "SlotItem | None":
-
         menu_pgs = {}
         items_selects_list: list["SlotItem"] = []
         for i, item in enumerate(items):

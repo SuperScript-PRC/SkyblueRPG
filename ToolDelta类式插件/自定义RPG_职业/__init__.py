@@ -5,13 +5,12 @@ from tooldelta import (
     Player,
     Plugin,
     utils,
-    Chat,
     TYPE_CHECKING,
     plugin_entry,
 )
 from tooldelta.constants import PacketIDS
 
-from . import job_frame, jobs_carry_man, jobs_mail_deliver, jobs_cleaner
+from . import event_apis, job_frame, jobs_carry_man, jobs_mail_deliver, jobs_cleaner
 
 tmpjs = utils.tempjson
 JOB_LIMIT = 3
@@ -43,6 +42,8 @@ class CustomRPGJobs(Plugin):
     author = "SuperScript"
     version = (0, 0, 1)
 
+    event_apis = event_apis
+
     def __init__(self, frame):
         super().__init__(frame)
         self.pkt_funcs: dict[int, list] = {}
@@ -53,7 +54,6 @@ class CustomRPGJobs(Plugin):
         self.ListenActive(self.on_inject)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
-        self.ListenChat(self.on_player_message)
         self.ListenFrameExit(self.on_frame_exit)
         self.ListenPacket([PacketIDS.BlockEvent], self.on_pkts)
 
@@ -85,6 +85,7 @@ class CustomRPGJobs(Plugin):
         self.MultiPage = MultiPage = self.snowmenu.MultiPage
         self.loaded_job_menus: dict[str, MultiPage] = {}
         self.jobs: dict[str, job_frame.Job] = {job.name: job(self) for job in jobs}
+        self.cb2bot.regist_message_cb(r"career.madd", self.on_career_add)
 
     def _page_cb(self, player: Player, page: int):
         outputs = "§6职业选择"
@@ -128,9 +129,7 @@ class CustomRPGJobs(Plugin):
 
     def on_player_join(self, player: Player):
         r = tmpjs.load_and_read(
-            self.format_data_path(
-                "玩家数据", player.xuid + ".json"
-            ),
+            self.format_data_path("玩家数据", player.xuid + ".json"),
             need_file_exists=False,
             default={"curr_jobs": {}, "avali_jobs": [], "credit": 0},
         )
@@ -160,16 +159,11 @@ class CustomRPGJobs(Plugin):
         for playername in self.loaded_jobs.keys():
             self.save(self.rpg.getPlayer(playername))
 
-    def on_player_message(self, chat: Chat):
-        player = chat.player
-        msg = chat.msg
-
-        if msg == "career.madd.邮递员":
-            self.plot_add_job(player, "邮递员")
-        elif msg == "career.madd.环卫工":
-            self.plot_add_job(player, "环卫工")
-        elif msg == "career.madd.建材搬运工":
-            self.plot_add_job(player, "建材搬运工")
+    def on_career_add(self, args):
+        playername, job = args
+        player = self.game_ctrl.players.getPlayerByName(playername)
+        assert player
+        self.plot_add_job(player, job)
 
     def on_pkts(self, pk):
         for func in self.pkt_funcs.get(26, []):
@@ -207,7 +201,9 @@ class CustomRPGJobs(Plugin):
         if job_name not in (job.name for job in jobs):
             self.rpg.show_fail(player, "无效职业名")
             return
-        self.loaded_jobs[player.name]["curr_jobs"][job_name] = self.init_job_data(job_name)
+        self.loaded_jobs[player.name]["curr_jobs"][job_name] = self.init_job_data(
+            job_name
+        )
         self.rpg.show_any(player, "d", f"设置职业： §e{job_name}")
 
     def player_change_job(self, player: Player):
@@ -233,7 +229,9 @@ class CustomRPGJobs(Plugin):
         self.menu_cbs[trigger] = cb
 
     def add_job(self, player: Player, job_name: str, showto: bool = True):
-        self.loaded_jobs[player.name]["curr_jobs"][job_name] = self.init_job_data(job_name)
+        self.loaded_jobs[player.name]["curr_jobs"][job_name] = self.init_job_data(
+            job_name
+        )
         if showto:
             self.rpg.show_any(player, "d", f"获得新职业： §e{job_name}")
 
@@ -242,9 +240,7 @@ class CustomRPGJobs(Plugin):
 
     def save(self, player: Player):
         tmpjs.load_and_write(
-            path := self.format_data_path(
-                "玩家数据", player.xuid + ".json"
-            ),
+            path := self.format_data_path("玩家数据", player.xuid + ".json"),
             self.loaded_jobs[player.name],
             need_file_exists=False,
         )

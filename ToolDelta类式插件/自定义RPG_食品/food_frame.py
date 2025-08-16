@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from 自定义RPG.rpg_lib.rpg_entities import PlayerProperties
+    from 自定义RPG.rpg_lib.rpg_entities import PlayerEntity
     from . import CustomRPGFood
 
 SYSTEM: "CustomRPGFood | None" = None
@@ -24,6 +24,7 @@ def effect_cls(clsname: str):
 
 class RPGFood:
     tag_name: str = "???"
+    star_level: int = 3
     show_name: str = "<食品???>"
     description: str = "<简介???>"
     stackable: bool = True
@@ -32,23 +33,23 @@ class RPGFood:
     cure_hp: int = 0
     cure_hp_percent: float = 0
 
-    def __init__(self, user: "PlayerProperties"):
+    def __init__(self, user: "PlayerEntity"):
         self.user = user
         self.sys = get_system()
 
 
     def eat(self) -> bool:
-        "食用此食品, 返回是否消耗该食品。"
+        "食用此食品, 返回是否不消耗该食品。"
         self.user._update()
         hp_added = int(self.user.tmp_hp_max * self.cure_hp_percent + self.cure_hp)
         self.user.cured(self.user, self.sys.rpg.constants.SrcType.FROM_SKILL, hp_added)
-        return True
+        return False
 
     def add_effect(
         self, effect_name: str, seconds: int = 30, level: int = 0, visible=False
     ):
         get_system().game_ctrl.sendwocmd(
-            f'effect @a[name="{self.user}"] {effect_name} {seconds} {level} {"false" if visible else "true"}'
+            f'effect @a[name="{self.user.name}"] {effect_name} {seconds} {level} {"false" if visible else "true"}'
         )
 
     def add_rpg_effect(self, effect_name: str, seconds: int, level: int):
@@ -56,7 +57,7 @@ class RPGFood:
 
     def revert_effect(self, effect_name: str):
         get_system().game_ctrl.sendwocmd(
-            f'effect @a[name="{self.user}"] {effect_name} 0 0'
+            f'effect @a[name="{self.user.name}"] {effect_name} 0 0'
         )
 
 

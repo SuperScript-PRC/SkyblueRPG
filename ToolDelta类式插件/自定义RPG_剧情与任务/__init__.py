@@ -18,7 +18,7 @@ from tooldelta import (
 )
 
 from tooldelta.utils import chatbar_lock_list
-from . import plot_utils, quest_loader
+from . import plot_utils, quest_loader, event_apis
 
 importlib.reload(quest_loader)
 importlib.reload(plot_utils)
@@ -253,6 +253,7 @@ class CustomRPGPlotAndTask(Plugin):
 
     class PlotSelectTimeout(PlotExit): ...
 
+    event_apis = event_apis
     BroadcastListener = BroadcastListener
     DATA_PATH = DATA_PATH
     SPECIAL_QUEST_PATH = SPECIAL_QUEST_PATH
@@ -333,7 +334,7 @@ class CustomRPGPlotAndTask(Plugin):
         self.cfg, _ = config.get_plugin_config_and_version(
             self.name, CFG_STD, CFG_DEFAULT, self.version
         )
-        self.ListenPreload(self.on_def)
+        self.ListenPreload(self.on_def, priority=-5)
         self.ListenActive(self.on_inject)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
@@ -349,6 +350,7 @@ class CustomRPGPlotAndTask(Plugin):
         self.spx = self.GetPluginAPI("自定义RPG-特效")
         cb2bot = self.GetPluginAPI("Cb2Bot通信")
         if TYPE_CHECKING:
+            global Item
             from ..前置_世界交互 import GameInteractive
             from ..前置_聊天栏菜单 import ChatbarMenu
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
@@ -358,6 +360,7 @@ class CustomRPGPlotAndTask(Plugin):
             from ..自定义RPG_教程 import CustomRPGTutorial
             from ..自定义RPG_设置 import CustomRPGSettings
             from ..自定义RPG_特效 import FXStageShow
+            from ..虚拟背包 import Item
 
             self.intract: GameInteractive
             self.interper: ToolDelta_ZBasic
@@ -400,6 +403,13 @@ class CustomRPGPlotAndTask(Plugin):
             [("任务标签名", str, None)],
             "强制添加任务",
             self.force_start_quest,
+            op_only=True,
+        )
+        self.chatbar.add_new_trigger(
+            [".radques2"],
+            [("玩家名", str, None), ("任务标签名", str, None)],
+            "为他人强制添加任务",
+            self.force_start_quest_for_other,
             op_only=True,
         )
         self.chatbar.add_new_trigger(
@@ -600,6 +610,26 @@ class CustomRPGPlotAndTask(Plugin):
                 self.rpg.show_inf(player, "此任务之前已完成过， 重新开始任务")
             self.add_quest(player, quest)
 
+    def force_start_quest_for_other(self, player: Player, args):
+        target, quest_name = args
+        target = self.game_ctrl.players.getPlayerByName(target)
+        if target is None:
+            self.rpg.show_fail(player, "玩家不存在")
+            return
+        quest = self.get_quest(quest_name)
+        if quest is None:
+            self.rpg.show_fail(player, "该任务不存在")
+        elif plot_utils.player_is_in_quest(target, quest_name):
+            self.rpg.show_fail(player, "不能重复添加任务")
+        else:
+            if quest in self.read_quests_finished(target):
+                old = self.read_quest_datas(target)
+                del old["quests_ok"][quest.tag_name]
+                self.save_quest_datas(target, old)
+                self.rpg.show_inf(player, "此任务之前已完成过， 重新开始任务")
+            self.add_quest(target, quest)
+            self.rpg.show_succ(player, "已经给此人添加任务")
+
     def force_finish_quest(self, player: Player, args):
         quest_name = args[0]
         quest = self.get_quest(quest_name)
@@ -643,6 +673,12 @@ class CustomRPGPlotAndTask(Plugin):
                 and self.check_plot_record(player).get(plot.tagname) is not None
             ):
                 self.print(f"{player.name} 试图触发一次性剧情 {plot.tagname}, 已取消")
+                return
+            elif np := self.running_plots.get(player):
+                fmts.print_war(
+                    f"{player.name} 尝试触发剧情 {np} 但是已经在 {plot}",
+                    need_log=False,
+                )
                 return
             plot_utils.run_plot(player, plot)
         else:

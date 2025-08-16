@@ -20,6 +20,7 @@ class Mob:
     effect_anti: float = 0.0
     drop_exp_range: tuple[int, int]
     loots: tuple[tuple[str, int, float], ...]
+    harmful: bool | None = None
 
     @classmethod
     def init(cls, entity: "MobEntity"):
@@ -54,6 +55,12 @@ class Mob:
         killer: "ENTITY",
     ) -> bool:
         return True
+
+    @classmethod
+    def is_harmful(cls):
+        if cls.harmful is None:
+            cls.harmful = sum(cls.atks) != 0
+        return cls.harmful
 
 
 registered_mobs: dict[str, type[Mob]] = {}

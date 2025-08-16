@@ -13,7 +13,7 @@ from .utils import (
 from . import frame_objects
 from . import frame_effects
 from . import frame_mobs
-from .frame_effects import RPGEffect, EffectType, add_effect
+from .frame_effects import RPGEffect, EffectType, add_effect, find_effect_class
 
 ENTITY = Union["PlayerEntity", "MobEntity"]
 SWORD_ICON = ""  # ⚔
@@ -87,13 +87,14 @@ class PlayerEntity:
         self.relics: list["Relic | None"] = []
         self.is_skill_set = False
         self.is_ult_set = False
+        self.pvp = False
 
     def init_basic(
         self,
         atks: list[int],
         defs: list[int],
-        atk_add: list,
-        def_add: list,
+        atk_add: list[float],
+        def_add: list[float],
         crit_pc: float,
         crit_add: float,
         chg_add: float,
@@ -300,7 +301,7 @@ class PlayerEntity:
 
     def add_effect(
         self,
-        effect: type[RPGEffect] | RPGEffect,
+        effect: type[RPGEffect] | RPGEffect | str,
         fromwho: "ENTITY",
         sec: int = 1,
         lv: int = 1,
@@ -309,12 +310,14 @@ class PlayerEntity:
     ):
         if isinstance(effect, RPGEffect):
             eff = effect
+        elif isinstance(effect, str):
+            eff = find_effect_class(effect)(self, fromwho, sec, lv, **kwargs)
         else:
             eff = effect(self, fromwho, sec, lv, **kwargs)
         if fromwho != self and eff.type == EffectType.NEGATIVE:
             if random.randint(1, int(hit * 1000)) <= self.tmp_effect_hit * 1000:
                 return
-        add_effect(self, effect, fromwho, sec, lv, hit, **kwargs)
+        add_effect(self, eff, fromwho, sec, lv, hit, **kwargs)
         if isinstance(fromwho, PlayerEntity):
             if fromwho != self:
                 self.player.setActionbar(make_entity_panel(fromwho, self))
@@ -336,6 +339,12 @@ class PlayerEntity:
     def run_cmd(self, cmd: str):
         self.system.game_ctrl.sendwocmd(cmd.replace("%t", '"' + self.player.name + '"'))
 
+    def get_effect(self, effect_tagname: str):
+        for i in self.effects:
+            if i.__class__.__name__ == effect_tagname:
+                return i
+        return None
+
     def show_attack(self, target: ENTITY, is_crit: bool):
         changed = -self.system.entity_holder.get_hp_changed(target)
         damage_num = self.system.bigchar.replaceBig(str(changed))
@@ -352,6 +361,9 @@ class PlayerEntity:
         self.system.game_ctrl.sendwocmd(
             f"/scoreboard players set {self.player.safe_name} sr:pl_hp {self.hp}"
         )
+
+    def switch_pvp(self, pvp: bool):
+        self.pvp = pvp
 
     def _update(self):
         self.tmp_atk_add = self.basic_atk_add.copy()
@@ -656,30 +668,30 @@ class PlayerPanel:
             append(f"§7 - {elem} (攻击/防御): " + t)
         if self.eff_crit_pc > 0:
             append(
-                f"§7 - §4暴击率 §f{round(self.p_bas_crit_pc * 100)}%§a+{round(self.bas_crit_pc * 100)}%§6+{round(self.eff_crit_pc * 100)}%"
+                f"§7 - §4暴击率 §f{round(self.p_bas_crit_pc * 100)}%%§a+{round(self.bas_crit_pc * 100)}%%§6+{round(self.eff_crit_pc * 100)}%%"
             )
         else:
             append(
-                f"§7 - §4暴击率 §f{round(self.p_bas_crit_pc * 100)}%§a+{round(self.bas_crit_pc * 100)}%"
+                f"§7 - §4暴击率 §f{round(self.p_bas_crit_pc * 100)}%%§a+{round(self.bas_crit_pc * 100)}%%"
             )
         if self.eff_crit_add > 0:
             append(
-                f"§7 - §4暴击伤害加成 §f{round(self.p_bas_crit_add * 100)}%§a+{round(self.bas_crit_pc * 100)}%§6+{round(self.eff_crit_pc * 100)}%"
+                f"§7 - §4暴击伤害加成 §f{round(self.p_bas_crit_add * 100)}%%§a+{round(self.bas_crit_pc * 100)}%%§6+{round(self.eff_crit_pc * 100)}%%"
             )
         else:
             append(
-                f"§7 - §4暴击伤害加成 §f{round(self.p_bas_crit_add * 100)}%§a+{round(self.bas_crit_add * 100)}%"
+                f"§7 - §4暴击伤害加成 §f{round(self.p_bas_crit_add * 100)}%%§a+{round(self.bas_crit_add * 100)}%%"
             )
         if self.eff_eff_hit > 0:
             append(
-                f"§7 - §3效果命中 §f{round(self.bas_eff_hit * 100)}%§6+{round(self.eff_eff_hit * 100)}%"
+                f"§7 - §3效果命中 §f{round(self.bas_eff_hit * 100)}%%§6+{round(self.eff_eff_hit * 100)}%%"
             )
         else:
-            append(f"§7 - §3效果命中 §f{round(self.bas_eff_hit * 100)}%")
+            append(f"§7 - §3效果命中 §f{round(self.bas_eff_hit * 100)}%%")
         if self.eff_eff_anti > 0:
             append(
-                f"§7 - §3效果抵抗 §f{round(self.bas_eff_anti * 100)}%§6+{round(self.eff_eff_anti * 100)}%"
+                f"§7 - §3效果抵抗 §f{round(self.bas_eff_anti * 100)}%%§6+{round(self.eff_eff_anti * 100)}%%"
             )
         else:
-            append(f"§7 - §3效果抵抗 §f{round(self.bas_eff_anti * 100)}%")
+            append(f"§7 - §3效果抵抗 §f{round(self.bas_eff_anti * 100)}%%")
         return txts

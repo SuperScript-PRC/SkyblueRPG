@@ -1,5 +1,6 @@
 from random import randint, choices
 from tooldelta import utils, game_utils, Player
+from .event_apis import PlayerFinishJobEvent
 from .job_frame import Job, SYSTEM, int_time
 
 TRASH_VALUE_AND_WGT: dict[int, dict[str, tuple[float, float]]] = {
@@ -78,7 +79,9 @@ class Cleaner(Job):
         garbage_counts = sum(garbages.values())
         self.sys.rpg.show_any(player, "f", "§7你翻完了这个垃圾桶并获得了：")
         for garbage, count in garbages.items():
-            self.sys.rpg.backpack_holder.giveItems(player, self.sys.rpg.item_holder.createItems(garbage, count))
+            self.sys.rpg.backpack_holder.giveItems(
+                player, self.sys.rpg.item_holder.createItems(garbage, count)
+            )
         self.add_exp(player, int(garbage_counts / 6))
         self.add_credit(player, garbage_counts / 12)
         self.flush_trash_bin_data(x, y, z)
@@ -94,18 +97,25 @@ class Cleaner(Job):
         for garbage_id, (val, _) in self.get_avali_garbages(
             self.calculate_level(self.get_exp(player))
         ).items():
-            if (count := self.sys.rpg.backpack_holder.getItemCount(player, garbage_id)) > 0:
+            if (
+                count := self.sys.rpg.backpack_holder.getItemCount(player, garbage_id)
+            ) > 0:
                 max_val += count * val
                 submit_items.append((garbage_id, count))
-        val = int(max_val)
+        salary = int(max_val)
         if max_val < 1:
             self.sys.rpg.show_warn(
                 player, f"总物品价值不足 1 点 ({max_val}/1) §6， 无法回收"
             )
             return
         for garbage_id, _ in submit_items:
-            self.sys.rpg.backpack_holder.clearItem(player, garbage_id, -1, show_to_player=False)
-        garbages = [(self.sys.rpg.item_holder.getOrigItem(i), count) for i, count in submit_items]
+            self.sys.rpg.backpack_holder.clearItem(
+                player, garbage_id, -1, show_to_player=False
+            )
+        garbages = [
+            (self.sys.rpg.item_holder.getOrigItem(i), count)
+            for i, count in submit_items
+        ]
         self.sys.rpg.show_succ(
             player, f"你将 §f{sum(i[1] for i in submit_items)}§a 件废品回收了："
         )
@@ -113,8 +123,13 @@ class Cleaner(Job):
             self.sys.rpg.show_any(
                 player, "7", f"§7◇ §f{garbage.show_name} §7x §f{count}"
             )
-        self.sys.rpg.show_any(player, "7", f"§e收益§7： §f{val} §b蔚蓝点")
-        self.sys.rpg.backpack_holder.giveItems(player, self.sys.rpg.item_holder.createItems("蔚蓝点", val), False)
+        self.sys.rpg.show_any(player, "7", f"§e收益§7： §f{salary} §b蔚蓝点")
+        self.sys.rpg.backpack_holder.giveItems(
+            player, self.sys.rpg.item_holder.createItems("蔚蓝点", salary), False
+        )
+        self.sys.BroadcastEvent(
+            PlayerFinishJobEvent(player, self.name, salary, 0).to_broadcast()
+        )
 
     def create_trash_bin(self, player: Player, _):
         if not player.is_op():

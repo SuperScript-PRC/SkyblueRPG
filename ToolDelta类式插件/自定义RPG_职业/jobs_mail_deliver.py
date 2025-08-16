@@ -3,6 +3,7 @@ import random
 import math
 from tooldelta import utils, Player
 from tooldelta.game_utils import getTarget
+from .event_apis import PlayerFinishJobEvent
 from .job_frame import Job, SYSTEM, int_time
 
 POS = tuple[int, int, int]
@@ -124,7 +125,9 @@ class MailDeliver(Job):
                 self.sys.reduce_credit(player, round(timeout_pass / 300))
             jdatas = self.read_datas(player)
             jdatas.setdefault("weight", 0)
-            jdatas["weight"] = max(0, jdatas["weight"] - (this_weight := WEIGHTS[mail.metadata["size"]]))
+            jdatas["weight"] = max(
+                0, jdatas["weight"] - (this_weight := WEIGHTS[mail.metadata["size"]])
+            )
             self.write_datas(player, jdatas)
             self.add_credit(player, this_weight / 10)
             self.sys.rpg.backpack_holder.removePlayerStore(player, mail, 1)
@@ -142,10 +145,16 @@ class MailDeliver(Job):
             assert q, "任务未载入: " + qname
             if q in self.sys.rpg_quests.read_quests(player):
                 self.sys.rpg_quests.finish_quest(player, q)
-        profit = max(0, profit)
-        self.sys.rpg.backpack_holder.giveItems(player, self.sys.rpg.item_holder.createItems("蔚蓝点", int(profit)))
+        profit = int(max(0, profit))
+        exp = int(this_weight)
+        self.sys.rpg.backpack_holder.giveItems(
+            player, self.sys.rpg.item_holder.createItems("蔚蓝点", profit)
+        )
         self.delete_mail_records(player, [mail.metadata["ud"] for mail in mails])
-        self.add_exp(player, int(this_weight))
+        self.add_exp(player, exp)
+        self.sys.BroadcastEvent(
+            PlayerFinishJobEvent(player, self.name, profit, exp).to_broadcast()
+        )
 
     def get_random_address(
         self, center: tuple[int, int] | None = None, radius: int = 300

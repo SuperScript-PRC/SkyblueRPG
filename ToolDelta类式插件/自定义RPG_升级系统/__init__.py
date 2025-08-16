@@ -5,6 +5,7 @@ from types import CodeType
 from typing import TYPE_CHECKING, Any
 from tooldelta import Plugin, Player, fmts, cfg, utils, plugin_entry
 
+from . import event_apis
 from .upgrade_cfg import RelicUpgradeConfig, WeaponUpgradeConfig
 
 
@@ -75,10 +76,10 @@ class CustomRPGUpgrade(Plugin):
     author = "SuperScript"
     name = "自定义RPG-升级系统"
 
+    event_apis = event_apis
+
     WeaponUpgradeConfig = WeaponUpgradeConfig
     RelicUpgradeConfig = RelicUpgradeConfig
-
-    # UpgradeModeRelic = CustomRPGUpgradeGroup_Relic
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -89,35 +90,6 @@ class CustomRPGUpgrade(Plugin):
         CFG_STD = {
             "玩家升级所需经验值的计算公式": str,
             "玩家晋阶时执行的指令": cfg.JsonList(str),
-            # "道具升级(道具所属组类:升级样式)": cfg.AnyKeyValue(
-            #     {
-            #         "可用升级材料及单个材料给予的经验值(不提供经验值则填0)": cfg.AnyKeyValue(
-            #             cfg.NNInt
-            #         ),
-            #         "升级后属性数值公式": str,
-            #         "每升一级后升级所需经验数计算公式": str,
-            #         "升级到这些级数的时候晋阶所需的[材料:数量]": cfg.AnyKeyValue(
-            #             cfg.AnyKeyValue(cfg.PInt)
-            #         ),
-            #     }
-            # ),
-            # "饰品升级(道具所属组类:升级样式)": cfg.AnyKeyValue(
-            #     {
-            #         "达到等级时副词条变动": cfg.JsonList(cfg.PInt),
-            #         "最大等级": cfg.PInt,
-            #         "可用升级材料及单个材料给予的经验值(不提供经验值则填0)": cfg.AnyKeyValue(
-            #             cfg.NNInt
-            #         ),
-            #         "每升一级后升级所需经验数计算公式": str,
-            #         "升级到这些级数的时候晋阶所需的[材料:数量]": cfg.AnyKeyValue(
-            #             cfg.AnyKeyValue(cfg.PInt)
-            #         ),
-            #         "主词条数值权重": cfg.AnyKeyValue(
-            #             cfg.NNNumber,
-            #         ),
-            #         "副词条数值权重": cfg.AnyKeyValue(cfg.NNNumber),
-            #     }
-            # ),
             "饰品可用定向升级材料": cfg.AnyKeyValue(
                 {"属性": str, "最小权重": float, "最大权重": float}
             ),
@@ -195,11 +167,8 @@ class CustomRPGUpgrade(Plugin):
             case 2:
                 return
 
-    def make_inited_relic_metadata(
-        self, item: "Item", mainprops_num=1, subprops_num=5
-    ):
+    def make_inited_relic_metadata(self, item: "Item", mainprops_num=1, subprops_num=5):
         "初始化饰品信息, 随机词条(默认5条)"
-        # upgrade_mode = self.relic_update.get(category)
         upgrade_config = self.rpg.find_relic_class(item.id).upgrade_mode
         if upgrade_config is None:
             raise ValueError(f"无法从配置文件找到升级样式: {item.id}")
@@ -237,13 +206,15 @@ class CustomRPGUpgrade(Plugin):
     def on_upgrade_weapon(self, player: Player):
         self.upgrade_weapon(player)
         self.rpg.player_holder.update_property_from_basic(
-            self.rpg.player_holder.get_player_basic(player), self.rpg.player_holder.get_playerinfo(player)
+            self.rpg.player_holder.get_player_basic(player),
+            self.rpg.player_holder.get_playerinfo(player),
         )
 
     def on_upgrade_relic(self, player: Player):
         self.upgrade_relic(player)
         self.rpg.player_holder.update_property_from_basic(
-            self.rpg.player_holder.get_player_basic(player), self.rpg.player_holder.get_playerinfo(player)
+            self.rpg.player_holder.get_player_basic(player),
+            self.rpg.player_holder.get_playerinfo(player),
         )
 
     def upgrade_weapon(self, player: Player) -> None:
@@ -266,7 +237,6 @@ class CustomRPGUpgrade(Plugin):
         item_orig = section
         item_weapon = self.rpg.ItemWeapon.load_from_item(item_orig)
         upgrade_cofig = self.rpg.find_weapon_class(item_orig.item.id).upgrade_mode
-        # upgrade_mode = self.weapon_update.get(item_orig.item.categories[0])
         if upgrade_cofig is None:
             self.rpg.show_warn(
                 player,
@@ -371,12 +341,16 @@ class CustomRPGUpgrade(Plugin):
                     return
                 if resp == 0:
                     # 升级物品
-                    rpg.backpack_holder.removePlayerStore(player, material, material_count)
+                    rpg.backpack_holder.removePlayerStore(
+                        player, material, material_count
+                    )
                     rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
-                    rpg.backpack_holder.addPlayerStore(player, item_upgrade_fake.dump_item())
+                    rpg.backpack_holder.addPlayerStore(
+                        player, item_upgrade_fake.dump_item()
+                    )
                     rpg.show_succ(player, f"{item_orig.item.show_name} §a升级成功")
                     self.game_ctrl.sendwocmd(
-                        f"/execute as {player.getSelector()} run playsound random.levelup @s"
+                        f"/execute as {player.safe_name} run playsound random.levelup @s"
                     )
                     item_name_disp = (
                         item_upgrade_fake.slotItem.item.show_name + " §a升级完成"
@@ -391,6 +365,11 @@ class CustomRPGUpgrade(Plugin):
                         )
                         player.setActionbar(n_name)
                         time.sleep(0.2)
+                    self.BroadcastEvent(
+                        event_apis.PlayerUpgradeObjectEvent(
+                            player, item_orig
+                        ).to_broadcast()
+                    )
                     break
                 elif resp == 2:
                     while 1:
@@ -454,12 +433,14 @@ class CustomRPGUpgrade(Plugin):
                 assert material_item, (
                     f"material {tag_name}->material can't be None or empty"
                 )
-                self.rpg.backpack_holder.removePlayerStore(player, material_item[0], count)
+                self.rpg.backpack_holder.removePlayerStore(
+                    player, material_item[0], count
+                )
             self.rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
             item_orig.metadata["Lv"] += 1
             self.rpg.backpack_holder.addPlayerStore(player, item_orig)
             self.game_ctrl.sendwocmd(
-                f"/execute as {player.getSelector()} run playsound random.levelup @s"
+                f"/execute as {player.safe_name} run playsound random.levelup @s"
             )
             self.rpg.show_succ(player, "物品晋阶成功， 可以继续升级")
 
@@ -469,14 +450,14 @@ class CustomRPGUpgrade(Plugin):
         storlist = rpg.backpack_holder.list_player_store_with_filter(
             player,
             [
-                constants.Category.HELMET,
-                constants.Category.CHESTPLATE,
-                constants.Category.LEGGINGS,
-                constants.Category.BOOTS,
-                constants.Category.RELICA,
-                constants.Category.RELICB,
-                constants.Category.RELICC,
-                constants.Category.RELICD,
+                constants.HiddenCategory.HELMET,
+                constants.HiddenCategory.CHESTPLATE,
+                constants.HiddenCategory.LEGGINGS,
+                constants.HiddenCategory.BOOTS,
+                constants.HiddenCategory.RELICA,
+                constants.HiddenCategory.RELICB,
+                constants.HiddenCategory.RELICC,
+                constants.HiddenCategory.RELICD,
             ],
         )
         if storlist:
@@ -514,10 +495,13 @@ class CustomRPGUpgrade(Plugin):
             if res is not None:
                 materials_select.append(res[0])
         exp_proved = {
-            i: upgrade_cofig.available_upgrade_materials[i.item.id] for i in materials_select
+            i: upgrade_cofig.available_upgrade_materials[i.item.id]
+            for i in materials_select
         }
         # 如果暂时不需要特殊晋级物品
-        spec_update_items = self.check_spec_item_upgrade(upgrade_cofig, item_relic.level)
+        spec_update_items = self.check_spec_item_upgrade(
+            upgrade_cofig, item_relic.level
+        )
         if materials_select == []:
             rpg.show_fail(player, "你没有可用于升级此饰品的物品")
             return
@@ -558,7 +542,9 @@ class CustomRPGUpgrade(Plugin):
                     )
                     while 1:
                         # 检测经验增加后等级是否可以晋阶
-                        upgrade_need_exp_fake = upgrade_cofig.upgrade_exp_syntax(item_relic_upgrade_fake.level)
+                        upgrade_need_exp_fake = upgrade_cofig.upgrade_exp_syntax(
+                            item_relic_upgrade_fake.level
+                        )
                         if exp_boost < upgrade_need_exp_fake:
                             break
                         if self.check_spec_item_upgrade(
@@ -571,7 +557,9 @@ class CustomRPGUpgrade(Plugin):
                         item_relic_upgrade_fake.level += 1
                         item_relic_upgrade_fake, upgrade_subprops = (
                             self.relic_upgrade_once(
-                                item_relic_upgrade_fake, upgrade_cofig, extra_mateterials
+                                item_relic_upgrade_fake,
+                                upgrade_cofig,
+                                extra_mateterials,
                             )
                         )
                         if upgrade_subprops:
@@ -602,9 +590,13 @@ class CustomRPGUpgrade(Plugin):
                     rpg.show_fail(player, "选项超时, 已退出")
                     return
                 if resp == 0:
-                    rpg.backpack_holder.removePlayerStore(player, material, material_count)
+                    rpg.backpack_holder.removePlayerStore(
+                        player, material, material_count
+                    )
                     rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
-                    rpg.backpack_holder.addPlayerStore(player, item_relic_upgrade_fake.dump_item())
+                    rpg.backpack_holder.addPlayerStore(
+                        player, item_relic_upgrade_fake.dump_item()
+                    )
                     rpg.show_succ(
                         player,
                         f"{item_relic_upgrade_fake.slotItem.item.show_name} §r§a升级成功",
@@ -618,7 +610,7 @@ class CustomRPGUpgrade(Plugin):
                         ),
                     )
                     self.game_ctrl.sendwocmd(
-                        f"/execute as {player.getSelector()} run playsound random.levelup @s"
+                        f"/execute as {player.safe_name} run playsound random.levelup @s"
                     )
                     item_name_disp = (
                         item_relic_upgrade_fake.slotItem.item.show_name + " §a升级完成"
@@ -633,6 +625,11 @@ class CustomRPGUpgrade(Plugin):
                         )
                         player.setActionbar(n_name)
                         time.sleep(0.1)
+                    self.BroadcastEvent(
+                        event_apis.PlayerUpgradeObjectEvent(
+                            player, item_orig
+                        ).to_broadcast()
+                    )
                     break
                 elif resp == 1:
                     rpg.show_inf(player, "已取消升级")
@@ -668,7 +665,9 @@ class CustomRPGUpgrade(Plugin):
                             allowed_direct_items.append(
                                 SlotItem(
                                     getting_item,
-                                    rpg.backpack_holder.getItemCount(player, getting_item.id),
+                                    rpg.backpack_holder.getItemCount(
+                                        player, getting_item.id
+                                    ),
                                 )
                             )
                     while 1:
@@ -764,12 +763,14 @@ class CustomRPGUpgrade(Plugin):
                 for tag_name, count in spec_update_items.items():
                     material_item = self.rpg.backpack_holder.getItems(player, tag_name)
                     assert material_item, "material can't be None"
-                    self.rpg.backpack_holder.removePlayerStore(player, material_item[0], count)
+                    self.rpg.backpack_holder.removePlayerStore(
+                        player, material_item[0], count
+                    )
                 self.rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
                 item_orig.metadata["Lv"] += 1
                 self.rpg.backpack_holder.addPlayerStore(player, item_orig)
                 self.game_ctrl.sendwocmd(
-                    f"/execute as {player.getSelector()} run playsound random.levelup @s"
+                    f"/execute as {player.safe_name} run playsound random.levelup @s"
                 )
                 self.rpg.show_succ(player, "物品晋阶成功， 可以继续升级")
                 return
@@ -933,7 +934,6 @@ class CustomRPGUpgrade(Plugin):
                         )
                         raise SystemExit
 
-
     def add_player_exp(self, player: Player, exp: int):
         dat_now = self.rpg.player_holder.get_player_basic(player)
         now_exp = dat_now.Exp
@@ -950,8 +950,8 @@ class CustomRPGUpgrade(Plugin):
                             {"[玩家名]": player.name, "[等级]": now_lv}, cmd
                         )
                     )
-                    self.game_ctrl.sendwocmd(f"xp -10000L {player.getSelector()}")
-                    self.game_ctrl.sendwocmd(f"xp {now_lv}L {player.getSelector()}")
+                    self.game_ctrl.sendwocmd(f"xp -10000L {player.safe_name}")
+                    self.game_ctrl.sendwocmd(f"xp {now_lv}L {player.safe_name}")
             else:
                 break
             time.sleep(0.05)

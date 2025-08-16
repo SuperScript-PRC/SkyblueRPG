@@ -2,6 +2,7 @@ import random
 import time
 from tooldelta import Player
 from tooldelta.game_utils import getTarget
+from .event_apis import PlayerFinishJobEvent
 from .job_frame import Job
 
 TRANSLATOR = {
@@ -70,7 +71,8 @@ class CarryMan(Job):
         self.D_time = 0
         self.sys.add_menu_cb("jzbyg-cb", self.place_cb)
         self.sys.cb2bot.regist_message_cb(
-            "job.carryman.take_items", lambda x: self.on_get_task(self.sys.rpg.getPlayer(x[0]))
+            "job.carryman.take_items",
+            lambda x: self.on_get_task(self.sys.rpg.getPlayer(x[0])),
         )
 
     def give_rand_task(self, player: Player):
@@ -113,7 +115,9 @@ class CarryMan(Job):
                 actua_materials[id][data] += 1
         for id, datas in actua_materials.items():
             for data, count in datas.items():
-                self.sys.game_ctrl.sendwocmd(f"give {player.getSelector()} {id} {count} {data}")
+                self.sys.game_ctrl.sendwocmd(
+                    f"give {player.safe_name} {id} {count} {data}"
+                )
         self.write_datas(
             player,
             {
@@ -167,7 +171,9 @@ class CarryMan(Job):
         if nearestPlayer == []:
             return
         playername = nearestPlayer[0]
-        self.submit_tasks(self.sys.rpg.getPlayer(playername), (x + x_move, y + 1, z + z_move))
+        self.submit_tasks(
+            self.sys.rpg.getPlayer(playername), (x + x_move, y + 1, z + z_move)
+        )
 
     def submit_tasks(self, player: Player, pos: tuple[int, int, int]):
         x, y, z = pos
@@ -190,7 +196,7 @@ class CarryMan(Job):
             rpg.show_warn(player, "请先在§e允许方块§6上放置建材")
         elif not is_ok:
             self.sys.game_ctrl.sendwocmd(f"fill {x} {y} {z} {x} {y + 2} {z} air")
-            player.setTitle("§a","§a已放好建材， 可以接着码放建材")
+            player.setTitle("§a", "§a已放好建材， 可以接着码放建材")
             _fmt = "， ".join(
                 f"§a{translate(k)}§2x{v}§f" for k, v in blocks.items() if k != "air"
             )
@@ -207,11 +213,13 @@ class CarryMan(Job):
             self.sys.game_ctrl.sendwocmd(f"fill {x} {y} {z} {x} {y + 2} {z} air")
             salary = int(jdatas["salary"])
             self.sys.game_ctrl.sendwocmd(
-                f"execute as {player.getSelector()} at @s run playsound random.levelup @s ~~~ 1 0.5"
+                f"execute as {player.safe_name} at @s run playsound random.levelup @s ~~~ 1 0.5"
             )
             rpg.show_succ(player, "你把所有的建材都码放到了指定地点。")
             rpg.show_succ(player, f"得到工钱 §e{salary} §b蔚蓝点")
-            rpg.backpack_holder.giveItems(player, rpg.item_holder.createItems("蔚蓝点", salary), False)
+            rpg.backpack_holder.giveItems(
+                player, rpg.item_holder.createItems("蔚蓝点", salary), False
+            )
             self.add_credit(player, 0.2)
             # PLOT QUEST SPEC
             q = self.sys.rpg_quests.get_quest(
@@ -224,6 +232,9 @@ class CarryMan(Job):
             jdatas["salary"] = 0
             self.write_datas(player, jdatas)
             self.add_exp(player, bs_num)
+            self.sys.BroadcastEvent(
+                PlayerFinishJobEvent(player, self.name, salary, bs_num).to_broadcast()
+            )
 
     def on_get_task(self, player: Player):
         rpg = self.sys.rpg

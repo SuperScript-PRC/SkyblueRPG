@@ -4,6 +4,8 @@ from tooldelta import Plugin, Player, utils, plugin_entry
 
 MAX_CONTENT = 10
 SPACE_NUM = 60
+ZHCN_START = 0x4E00
+ZHCN_END = 0x9FA5
 
 
 @dataclass
@@ -48,6 +50,29 @@ class FXStage:
 
     def cls(self):
         self.contents = ["§a"] * MAX_CONTENT
+
+    def put_mid(self, text: str):
+        def simple_calc_len(s: str):
+            return sum(
+                1 + (1 if ord(c) >= ZHCN_START and ord(c) <= ZHCN_END else 0) for c in s
+            )
+
+        texts_and_len = [(t, simple_calc_len(t)) for t in text.split("\n")]
+        space_up = max(0, MAX_CONTENT - len(texts_and_len)) // 2
+        space_bottom = max(0, MAX_CONTENT - len(texts_and_len) - space_up)
+        maxlen_text, maxlen = max(texts_and_len, key=lambda x: x[1])
+        mmaxlen = maxlen + 4
+        for _ in range(space_up):
+            self.contents.append("§a")
+        for text, textlen in texts_and_len:
+            left_space = (mmaxlen - textlen) // 2
+            if text == maxlen_text:
+                content_text = " " * left_space + text + " " * left_space
+            else:
+                content_text = " " * left_space + text
+            self.contents.append(content_text)
+        for _ in range(space_bottom):
+            self.contents.append("§a")
 
 
 def load_sfx_1(player: Player):
@@ -129,7 +154,7 @@ class FXStageShow(Plugin):
     name = "特效展示台"
 
     FXStage = FXStage
-    SFXStage = FXStage # deprecated
+    SFXStage = FXStage  # deprecated
 
     def __init__(self, frame):
         super().__init__(frame)

@@ -1,7 +1,7 @@
 from importlib import reload
 from tooldelta import Plugin, Player, utils, TYPE_CHECKING, plugin_entry
 
-from . import food_frame, food_loader
+from . import food_frame, food_loader, event_apis
 
 reload(food_loader)
 
@@ -10,6 +10,8 @@ class CustomRPGFood(Plugin):
     name = "自定义RPG-食品系统"
     author = "SuperScript"
     version = (0, 0, 1)
+
+    event_apis = event_apis
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -46,7 +48,9 @@ class CustomRPGFood(Plugin):
         player = self.rpg.getPlayer(args[0])
         if player not in self.food_loaded.keys():
             # deal 1
-            food_uuid = self.rpg.get_player_basic(player).metadatas.get("onhand_food")
+            food_uuid = self.rpg.player_holder.get_player_basic(player).metadatas.get(
+                "onhand_food"
+            )
             if food_uuid is None:
                 self.rpg.show_warn(player, "你暂时没有这个食物..")
                 self.set_food_to_hotbar(player, None)
@@ -56,47 +60,55 @@ class CustomRPGFood(Plugin):
                 if food is None:
                     return
                 self.food_loaded[player] = food
-        if (food := self.food_loaded[player]).eat():
-            self.rpg.clearItem(player, food.tag_name, 1, show_to_player=False)
+        if not (food := self.food_loaded[player]).eat():
+            self.rpg.backpack_holder.clearItem(
+                player, food.tag_name, 1, show_to_player=False
+            )
             self.rpg.rpg_upgrade.add_player_exp(player, 1)
             player.show("§a┃ §e吃到了美味的食物， 你的经验增加了！")
         else:
-            player.show(f"§a┃ {self.rpg.getOrigItem(food.tag_name).show_name} §r§e味道不错。")
-        if self.rpg.getItemCount(player, food.tag_name) <= 0:
+            player.show(
+                f"§a┃ {self.rpg.item_holder.getOrigItem(food.tag_name).show_name} §r§e味道不错。"
+            )
+        if self.rpg.backpack_holder.getItemCount(player, food.tag_name) <= 0:
             self.rpg.show_warn(player, "你手上的食物被吃完了..")
             self.set_food_to_hotbar(player, None)
         else:
             self.set_food_to_hotbar(player, food)
-        self.tutor.check_point("自定义RPG-食品:食用", player)
+        self.BroadcastEvent(event_apis.PlayerEatEvent(player, food).to_broadcast())
 
     def load_food_from_basic(self, player: Player, food_uuid: str):
-        food_slot = self.rpg.getItem(player, food_uuid)
+        food_slot = self.rpg.backpack_holder.getItem(player, food_uuid)
         if food_slot is None:
             self.set_food_to_hotbar(player, None)
             return None
         else:
             food = self.food_loaded[player] = food_frame.get_food_cls_by_tagname(
                 food_slot.item.id
-            )(self.rpg.get_playerinfo(player))
+            )(self.rpg.player_holder.get_playerinfo(player))
             return food
 
     def switch_food(self, slotitem: "SlotItem", player: Player):
         food_id = slotitem.item.id
-        playerinf = self.rpg.get_playerinfo(player)
+        playerinf = self.rpg.player_holder.get_playerinfo(player)
         if self.food_loaded.get(player) is None:
             food = self.load_food_from_basic(player, slotitem.uuid)
             self.rpg.show_succ(
                 player, f"现在可在物品栏食用 §f{slotitem.item.show_name}"
             )
             self.rpg.show_inf(player, "再次使用可以将食物放回背包")
-            self.rpg.get_player_basic(player).metadatas["onhand_food"] = slotitem.uuid
+            self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
+                slotitem.uuid
+            )
             self.set_food_to_hotbar(player, food)
         elif self.food_loaded[player].tag_name != food_id:
             food = self.food_loaded[player] = food_frame.get_food_cls_by_tagname(
                 food_id
             )(playerinf)
             self.rpg.show_inf(player, f"物品栏的食物换成了 §f{slotitem.item.show_name}")
-            self.rpg.get_player_basic(player).metadatas["onhand_food"] = slotitem.uuid
+            self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
+                slotitem.uuid
+            )
             self.set_food_to_hotbar(player, food)
         else:
             del self.food_loaded[player]
@@ -104,16 +116,20 @@ class CustomRPGFood(Plugin):
             self.rpg.show_inf(
                 player, f"你把 §f{slotitem.item.show_name} §r§f放回了背包中"
             )
-            self.rpg.get_player_basic(player).metadatas["onhand_food"] = None
+            self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
+                None
+            )
         return True
 
     def inject_use_func(self):
+        foods = food_frame.registered_foods_tagname
         for k, v in self.backpack.get_registed_items().items():
-            if k in food_frame.registered_foods_tagname.keys():
+            if food := foods.get(k):
+                self.rpg.item_holder.LoadExtraItem(v, food.star_level)
                 v.on_use = self.switch_food
 
     def set_food_to_hotbar(self, player: Player, food: "food_frame.RPGFood | None"):
-        player_s = player.getSelector()
+        player_s = player.safe_name
         if food:
             self.game_ctrl.sendwocmd(f"tag {player_s} add sr.have_food")
             self.game_ctrl.sendwocmd(
@@ -126,7 +142,6 @@ class CustomRPGFood(Plugin):
             )
             self.game_ctrl.sendwocmd(f"tag {player_s} remove sr.have_food")
 
-
     @utils.timer_event(1, "CRPG:食品冷却")
     def on_timer(self):
         for player, cd in self.food_cds.copy().items():
@@ -134,10 +149,10 @@ class CustomRPGFood(Plugin):
                 del self.food_cds[player]
                 if (food := self.food_loaded.get(player)) is not None:
                     self.game_ctrl.sendwocmd(
-                        f"replaceitem entity {player.getSelector()} slot.hotbar 3 {food.model_id} 1 {food.model_data}"
+                        f"replaceitem entity {player.safe_name} slot.hotbar 3 {food.model_id} 1 {food.model_data}"
                     )
             else:
                 self.food_cds[player] = cd - 1
 
 
-entry = plugin_entry(CustomRPGFood, "自定义RPG-食品系统")
+entry = plugin_entry(CustomRPGFood, "自定义RPG-食品")

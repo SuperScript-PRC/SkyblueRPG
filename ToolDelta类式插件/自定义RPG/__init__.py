@@ -17,6 +17,7 @@ from tooldelta import (
 from . import (
     backpack_holder,
     display_holder,
+    event_apis,
     path_holder,
     player_holder,
     mob_holder,
@@ -29,7 +30,6 @@ from . import (
 from .rpg_lib import (
     constants,
     default_cfg,
-    event_apis,
     formatter,
     utils as rpg_utils,
     scripts_loader,
@@ -142,12 +142,13 @@ class CustomRPG(Plugin):
         fmts.print_inf("§b本插件需要配合CustomRPG.bdx 使用!")
         self.menu = self.GetPluginAPI("聊天栏菜单", (0, 0, 1))
         self.ntag = self.GetPluginAPI("头衔系统")
+        self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
+        self.rpg_settings = self.GetPluginAPI("自定义RPG-设置")
         self.tutor = self.GetPluginAPI("自定义RPG-教程")
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
         self.snowmenu = self.GetPluginAPI("雪球菜单v3", (0, 0, 1))
         self.backpack = self.GetPluginAPI("虚拟背包")
-        self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
         if TYPE_CHECKING:
             global SlotItem, Item
             from ..前置_聊天栏菜单 import ChatbarMenu
@@ -156,6 +157,7 @@ class CustomRPG(Plugin):
             from ..雪球菜单v3 import SnowMenuV3
             from ..自定义RPG_升级系统 import CustomRPGUpgrade
             from ..自定义RPG_教程 import CustomRPGTutorial
+            from ..自定义RPG_设置 import CustomRPGSettings
             from ..虚拟背包 import VirtuaBackpack
             from ..头衔系统 import Nametitle
 
@@ -167,6 +169,7 @@ class CustomRPG(Plugin):
             self.snowmenu: SnowMenuV3
             self.backpack: VirtuaBackpack
             self.rpg_upgrade: CustomRPGUpgrade
+            self.rpg_settings: CustomRPGSettings
         SlotItem = self.backpack.SlotItem
         Item = self.backpack.Item
 
@@ -187,6 +190,21 @@ class CustomRPG(Plugin):
         #     r"sr.nearest.entities", self.handle_nearest_entities_cb
         # )
 
+    def if_kick_player(self, player: Player, sleep=False):
+        # return False
+        if not player.is_op():
+            if sleep:
+                time.sleep(3)
+            self.game_ctrl.sendwocmd(
+                f"kick {player.safe_name} §a\n§7[§cError§7]\n§c抱歉， 租赁服暂未开放， 您无法获得进入资格。"
+                "\n§d您可以查看我们的交流Q 750432518 获得终测资讯。\n§6最新开启时间： 08-17 10：00， "
+                + time.strftime(
+                    "§b当前 %y 年 %m 月 %d日 %H： %M： %S", time.localtime()
+                )
+            )
+            return True
+        return False
+
     def on_inject(self):
         self.game_ctrl.sendcmd("/tag @s add sr.rpg_bot")
         self.game_ctrl.sendwocmd("/gamerule sendcommandfeedback false")
@@ -203,14 +221,17 @@ class CustomRPG(Plugin):
         with RPG_Lock:
             try:
                 for player in self.game_ctrl.players:
+                    if self.if_kick_player(player):
+                        continue
                     self.init_game_player(player)
             except Exception:
                 fmts.print_err(traceback.format_exc())
             self.print("§a玩家数据均已初始化")
 
+    @utils.thread_func("自定义RPG:玩家进入")
     def on_player_join(self, player: Player):
-        # if not game_utils.is_op(player):
-        #    self.game_ctrl.sendwocmd(f"kick {player.xuid} §c未处于白名单内")
+        if self.if_kick_player(player, sleep=True):
+            return
         with RPG_Lock:
             self.init_game_player(player)
             basic = self.player_holder.get_player_basic(player)

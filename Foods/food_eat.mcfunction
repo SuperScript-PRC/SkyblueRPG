@@ -9,3 +9,4 @@ clear @a[tag=sr.food_eat] snowball 667 1
 execute as @a[tag=sr.food_eat] at @s run particle minecraft:heart_particle ~~1~
 tag @a[tag=sr.food_eat] remove sr.have_food
 tag @a remove sr.food_eat
+clear @a[tag=sr.have_food] minecraft:glass_bottle 0

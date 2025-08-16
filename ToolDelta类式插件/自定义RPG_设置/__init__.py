@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from tooldelta import Plugin, Player, plugin_entry, utils, TYPE_CHECKING
 
@@ -42,8 +43,13 @@ class Setting:
 
 
 available_settings = [
-    # Setting("pvp", "玩家间对战", ["§c关闭", "§a打开"], 1),
     # Setting("auto_change_weapon", "武器耐久耗尽自动切换", ["§c关闭", "§a打开"], 1),
+    Setting(
+        "pvp",
+        "PVP",
+        ["§c关闭", "§a打开"],
+        0,
+    ),
     Setting(
         "plot_printer_sfx",
         "剧情打字音效",
@@ -66,6 +72,9 @@ class CustomRPGSettings(Plugin):
         super().__init__(frame)
         self.ListenPreload(self.on_def)
         self.ListenActive(self.on_inject)
+        self.settings_changed_listeners: dict[
+            str, list[Callable[[Player, int], None]]
+        ] = {}
 
     def on_def(self):
         self.snowmenu = self.GetPluginAPI("雪球菜单v3")
@@ -86,6 +95,15 @@ class CustomRPGSettings(Plugin):
     def on_settings(self, player: Player):
         self._on_settings(player)
         return False
+
+    def add_setting_changed_listener(
+        self, setting_id: str, listener: Callable[[Player, int], None]
+    ):
+        self.settings_changed_listeners.setdefault(setting_id, []).append(listener)
+
+    def _on_trig_cb(self, player: Player, setting_id: str, value: int):
+        for listener in self.settings_changed_listeners.get(setting_id, []):
+            listener(player, value)
 
     @utils.thread_func("玩家进行设置")
     def _on_settings(self, player: Player):
@@ -117,11 +135,13 @@ class CustomRPGSettings(Plugin):
                             self.game_ctrl.sendwocmd(
                                 f'execute as "{player.name}" at @s run playsound random.toast'
                             )
+                            self._on_trig_cb(player, now_section.id, settings[now_section.id])
                     case ACTS.RIGHT:
                         if now_section.change(settings, 1):
                             self.game_ctrl.sendwocmd(
                                 f'execute as "{player.name}" at @s run playsound random.toast'
                             )
+                            self._on_trig_cb(player, now_section.id, settings[now_section.id])
                     case ACTS.UP:
                         now_selected = max(now_selected - 1, 0)
                     case ACTS.DOWN:
@@ -136,7 +156,7 @@ class CustomRPGSettings(Plugin):
                         return
             self.set_player_settings(player, settings)
 
-    def get_player_settings(self, player: Player) -> dict:
+    def get_player_settings(self, player: Player) -> dict[str, int]:
         return utils.tempjson.load_and_read(
             self.format_data_path(player.xuid + ".json"),
             need_file_exists=False,

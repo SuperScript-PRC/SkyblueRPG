@@ -32,6 +32,11 @@ class MobHolder:
         self.mob_data_cache[mob.uuid] = mob
         self.mob_data_cache_time[mob.uuid] = int_time()
         self.sys.entity_holder.load_mob(mob)
+        fmts.print_inf(
+            f"自定义RPG: 怪物 {mob.cls.tag_name}(ud={mob.uuid}) 生成",
+            end="\r",
+            need_log=False,
+        )
 
     # 清除怪物缓存数据
     def remove_mob(self, mob: MobEntity):
@@ -176,11 +181,17 @@ class MobHolder:
             raise ValueError("Fuck 怪物生成")
         if len(dats) == 1:
             self.sys.print("出现 UUID 为空的怪物; 正在处理")
-            self.sys.game_ctrl.sendwocmd("scoreboard players add @e[tag=sr.mob] sr:ms_uuid 0")
+            self.sys.game_ctrl.sendwocmd(
+                "scoreboard players add @e[tag=sr.mob] sr:ms_uuid 0"
+            )
             time.sleep(0.5)
-            self.sys.game_ctrl.sendwocmd(r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] add sr.mob_uninited")
+            self.sys.game_ctrl.sendwocmd(
+                r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] add sr.mob_uninited"
+            )
             time.sleep(0.5)
-            self.sys.game_ctrl.sendwocmd(r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] remove sr.mob")
+            self.sys.game_ctrl.sendwocmd(
+                r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] remove sr.mob"
+            )
             return
         self.mob_spawn(dats[1], int(dats[0]))
 

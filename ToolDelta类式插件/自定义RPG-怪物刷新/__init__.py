@@ -72,17 +72,22 @@ class CustomRPGMobSpawner(Plugin):
     def summon(self, mob_tagname: str, x: float, y: float, z: float):
         if (mob_cls := self.rpg.mob_holder.get_mob_class(mob_tagname)) is None:
             raise ValueError(f"无效的怪物标签名: {mob_tagname}")
-        res = self.game_ctrl.sendwscmd_with_resp(
-            f"summon {mob_cls.model_id} {x} {y} {z}"
-        )
+        if mob_cls.model_id.startswith("mystructure:"):
+            res = self.game_ctrl.sendwscmd_with_resp(
+                f"structure load {mob_cls.model_id} {x} {y} {z}"
+            )
+        else:
+            res = self.game_ctrl.sendwscmd_with_resp(
+                f"summon {mob_cls.model_id} {x} {y} {z}"
+            )
         if res.SuccessCount == 0:
             raise ValueError(f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}")
         self.game_ctrl.sendwocmd(
             f"scoreboard players set @e[x={x},y={y},z={z},r=1,c=1,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
         )
-        self.game_ctrl.sendwocmd(
-            f"effect @e[type={mob_cls.model_id},x={x},y={y},z={z},c=1] resistance 99999 100 true"
-        )
+        # self.game_ctrl.sendwocmd(
+        #     f"effect @e[type={mob_cls.model_id},x={x},y={y},z={z},c=1] resistance 99999 100 true"
+        # )
         self.game_ctrl.sendwocmd(
             f"tag @e[x={x},y={y},z={z},c=1,type={mob_cls.model_id}] add sr.mob_uninited"
         )

@@ -2,7 +2,7 @@ from enum import Enum, IntEnum
 from typing import Literal
 
 
-def category_join(*c):
+def category_join(*c: str):
     return ":".join(c)
 
 
@@ -51,12 +51,11 @@ class ModelType(IntEnum):
 class Category(str, Enum):
     MATERIAL = "材料"
     WEAPON = "武器"
-    ARMOR = "护甲"
     RELIC = "饰品"
 
-    SWORD = "剑"
-    BOW = "弓"
-    TRIDENT = "戟"
+    SWORD = category_join(WEAPON, "剑")
+    BOW = category_join(WEAPON, "弓")
+    TRIDENT = category_join(WEAPON, "戟")
 
     HELMET = "头盔"
     CHESTPLATE = "胸甲"
@@ -70,13 +69,12 @@ class Category(str, Enum):
 
 
 class HiddenCategory(str, Enum):
-    ARMOR = "__护甲"
     RELIC = "__饰品"
 
-    HELMET = category_join(ARMOR, Category.HELMET)
-    CHESTPLATE = category_join(ARMOR, Category.CHESTPLATE)
-    LEGGINGS = category_join(ARMOR, Category.LEGGINGS)
-    BOOTS = category_join(ARMOR, Category.BOOTS)
+    HELMET = category_join(RELIC, Category.HELMET)
+    CHESTPLATE = category_join(RELIC, Category.CHESTPLATE)
+    LEGGINGS = category_join(RELIC, Category.LEGGINGS)
+    BOOTS = category_join(RELIC, Category.BOOTS)
 
     RELICA = category_join(RELIC, Category.RELICA)
     RELICB = category_join(RELIC, Category.RELICB)
@@ -93,11 +91,8 @@ class WeaponType(IntEnum):
     # 戟
     TRIDENT = 2
 
-    def to_full_category(self):
-        return category_join(
-            Category.WEAPON,
-            (Category.SWORD, Category.BOW, Category.TRIDENT)[self.value],
-        )
+    def to_category(self):
+        return (Category.SWORD, Category.BOW, Category.TRIDENT)[self.value]
 
 
 # 护甲/饰品类型
@@ -121,11 +116,15 @@ class RelicType(IntEnum):
 
     def to_category(self):
         return (
+            Category.HELMET,
+            Category.CHESTPLATE,
+            Category.LEGGINGS,
+            Category.BOOTS,
             Category.RELICA,
             Category.RELICB,
             Category.RELICC,
             Category.RELICD,
-        )[self.value - 4]
+        )[self.value]
 
     def to_hidden_category(self):
         return category_join(HiddenCategory.RELIC, self.to_category())

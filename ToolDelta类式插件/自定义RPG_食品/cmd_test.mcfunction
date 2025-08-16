@@ -1,3 +1,3 @@
-playanimation @e[c=1,type=!player] animation.chicken.baby_transform "" 3
-
+playanimation @e[c=1,type=!player] animation.agent.swing_arms "" 1
 particle minecraft:death_explosion_emitter ~~1~
+

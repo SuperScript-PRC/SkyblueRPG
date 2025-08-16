@@ -1,10 +1,13 @@
 from tooldelta import Plugin, fmts, cfg, TYPE_CHECKING, utils, plugin_entry
+from . import event_apis
 
 
 class CustomRPGRepair(Plugin):
     name = "自定义RPG-修补系统"
     author = "SuperScript"
     version = (0, 0, 1)
+
+    event_apis = event_apis
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -157,12 +160,8 @@ class CustomRPGRepair(Plugin):
             if materials == []:
                 self.rpg.show_fail(player, "你没有任何修补材料")
                 return
-            # fix: not unbound
-            money_cost = 0
-            playerhave_vault_count = 0
-            # not unbound end
             with self.sight.create_env(player) as e:
-                while 1:
+                while True:
                     this_material = materials[now_index]
                     this_material_count = playerhave_materials[this_material]
                     this_material_rep_dur = this_repair_materials[this_material]
@@ -289,19 +288,30 @@ class CustomRPGRepair(Plugin):
                     player, "§c修复所需额外物品不足 (Item count changed)"
                 )
                 return
-            # DANGEROUS: 直接修改物品 metadata
-            item_need_repaired.metadata["DBL"] = new_duration
+            item_repaired = item_need_repaired.copy()
+            item_repaired.metadata["DBL"] = new_duration
             self.rpg.backpack_holder.clearItem(
                 player, material_to_repair, material_count
             )
             self.rpg.backpack_holder.clearItem(player, vault, money_cost)
+            self.rpg.backpack_holder.removePlayerStore(player, item_need_repaired, 1)
+            self.rpg.backpack_holder.addPlayerStore(player, item_repaired)
             self.game_ctrl.sendwocmd(
-                f"execute as {player.getSelector()} at @s run playsound random.anvil_use"
+                f"execute as {player.safe_name} at @s run playsound random.anvil_use"
             )
-            item_name = item_need_repaired.item.show_name
+            item_name = item_repaired.item.show_name
             self.rpg.show_succ(player, f"{item_name} §r§a修复完成")
             player.setActionbar(
                 f"{item_name} §r§7耐久: {self.format_durability_bar(new_duration, max_dur)}",
+            )
+            self.BroadcastEvent(
+                event_apis.PlayerRepairObjectEvent(
+                    player,
+                    item_repaired,
+                    material_to_repair,
+                    material_count,
+                    {vault: money_cost},
+                ).to_broadcast()
             )
 
     @staticmethod
@@ -326,4 +336,4 @@ class CustomRPGRepair(Plugin):
         return min(old_dur + mat_rep * count, max_dur)
 
 
-entry = plugin_entry(CustomRPGRepair)
+entry = plugin_entry(CustomRPGRepair, "自定义RPG-修补系统")

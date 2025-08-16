@@ -172,7 +172,7 @@ class ItemHolder:
             item = self.sys.backpack.Item(
                 weapon_name,
                 weapon_cls.show_name,
-                [weapon_cls.category.to_full_category()],
+                [weapon_cls.category.to_category()],
                 description=weapon_description_closure(weapon_cls.description),
                 stackable=False,
             )
@@ -196,6 +196,10 @@ class ItemHolder:
             items_starlevel[relic_name] = relic_cls.star_level
             self.backpack.regist_item(item)
         return loaded_weapons, loaded_relics, loaded_materials, items_starlevel
+
+    def LoadExtraItem(self, item: "Item", star_level: int):
+        self.loaded_materials[item.id] = item
+        self.items_starlevel[item.id] = star_level
 
     # 生成一个或多个物品
     def createItems(
