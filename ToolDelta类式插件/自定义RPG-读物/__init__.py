@@ -50,7 +50,8 @@ class CustomRPGItemScript(Plugin):
     def inject_item_use_script(self):
         for tagname, text in self.texts.items():
             if item := self.backpack.get_registed_item(tagname):
-                item.on_use = self.create_reader(item.show_name, text)
+                # TODO: directly use Item.disp_name
+                item.on_use = self.create_reader(str(item.disp_name), text)
             else:
                 Print.print_war(f"物品未注册: {tagname}")
 

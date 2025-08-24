@@ -2,9 +2,9 @@ import time
 from typing import TYPE_CHECKING
 from tooldelta import utils, Player
 from .event_apis import PlayerTradingWithNPCEvent
+from .define import ShopSellMeta, ShopSell
 
 if TYPE_CHECKING:
-    from ..虚拟背包 import Item
     from . import CustomRPGPlotAndTask
     from .quest_loader import RegisteredPlot
 
@@ -69,10 +69,8 @@ class Dialogue:
     ):
         return choice(self.player, self.text, sections, extra_insertion_sections)
 
-    def show_buy_and_sell(
-        self, buys_and_sells: list[tuple["Item", int, "Item", int, int, int]]
-    ):
-        return show_buy_and_sell(self.player, self.npc_name, buys_and_sells)
+    def show_buy_and_sell(self, *buys_and_sells: ShopSell | ShopSellMeta):
+        return show_buy_and_sell(self.player, self.npc_name, *buys_and_sells)
 
     def enter(self):
         return RotationCtrl(self.player)
@@ -251,70 +249,54 @@ def plot_box_print_with_choice(
 def show_buy_and_sell(
     player: Player,
     shop_name: str,
-    orig_buys_and_sells: list[tuple["Item", int, "Item", int, int, int]],
+    *orig_buys_and_sells: ShopSell | ShopSellMeta,
 ):
-    self = get_system()
+    sys = get_system()
     last_page = 0
     page_max = len(orig_buys_and_sells) - 1
-    bought: list[tuple["Item", int, "Item", int]] = []
-    playerinf = self.rpg.player_holder.get_playerinfo(player)
-    new_buys_and_sells = orig_buys_and_sells.copy()
+    bought: list[ShopSell | ShopSellMeta] = []
+    playerinf = sys.rpg.player_holder.get_playerinfo(player)
+    new_buys_and_sells = list(orig_buys_and_sells)
     if eff := playerinf.get_effect("Kindness"):
         level = eff.level
-        for i, (
-            buyitem,
-            buycount,
-            sellitem,
-            sellcount,
-            buycount_max,
-            buycd,
-        ) in enumerate(orig_buys_and_sells):
-            if buyitem.id == "蔚蓝点":
-                if buycount < 30:
-                    new_buycount = int(max(buycount // 2, buycount * (1 - level / 10)))
+        for i, bs in enumerate(orig_buys_and_sells):
+            if bs.cost_item.id == "蔚蓝点":
+                if bs.cost_count < 30:
+                    new_buycount = int(
+                        max(bs.cost_count // 2, bs.cost_count * (1 - level / 10))
+                    )
                 else:
-                    new_buycount = int(max(buycount // 2, buycount - level * 4))
-                new_buys_and_sells[i] = (
-                    buyitem,
-                    new_buycount,
-                    sellitem,
-                    sellcount,
-                    buycount_max,
-                    buycd,
-                )
+                    new_buycount = int(
+                        max(bs.cost_count // 2, bs.cost_count - level * 6)
+                    )
+                new_buys_and_sells[i].cost_count = new_buycount
     while 1:
         fmt_strings = []
-        for i, (
-            buyitem,
-            buycount,
-            sellitem,
-            sellcount,
-            buycount_max,
-            buycd,
-        ) in enumerate(new_buys_and_sells):
-            left, cdmin_time = self.get_shop_left2cd(
-                player, shop_name, sellitem.id, sellcount, buyitem.id, buycount
-            )
+        for i, bs in enumerate(new_buys_and_sells):
+            left, cdmin_time = sys.get_shop_left2cd(player, shop_name, bs.tag)
             if left is None or cdmin_time == 0:
-                left = buycount_max
+                left = bs.once_limit
             left_str = " 售罄" if left == 0 else f" 剩余{left}件"
             cd_str = (
-                (self.format_timer_zhcn(int(cdmin_time)) + "后补货")
+                (sys.format_timer_zhcn(int(cdmin_time)) + "后补货")
                 if not cdmin_time == 0
                 else ""
             )
-            old_buycount = orig_buys_and_sells[i][1]
-            if old_buycount > buycount:
+            old_buycount = orig_buys_and_sells[i].cost_count
+            sellcount = (
+                bs.sell_count if isinstance(bs, ShopSell) else bs.sell_item.count
+            )
+            if old_buycount > bs.cost_count:
                 fmt_strings.append(
-                    f"§f{buyitem.show_name}§r§ex§8{old_buycount}§e§l[{buycount}]§r §f➭ {sellitem.show_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§l（折!）§r"
+                    f"§f{bs.cost_item.disp_name}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§l（折!）§r"
                 )
-            elif old_buycount < buycount:
+            elif old_buycount < bs.cost_count:
                 fmt_strings.append(
-                    f"§f{buyitem.show_name}§r§ex§8{old_buycount}§e§l[{buycount}]§r §f➭ {sellitem.show_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§4（涨!）§r"
+                    f"§f{bs.cost_item.disp_name}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§4（涨!）§r"
                 )
             else:
                 fmt_strings.append(
-                    f"§f{buyitem.show_name}§r§ex{buycount} §f➭ {sellitem.show_name}§r§ex{sellcount}§7{left_str} {cd_str}"
+                    f"§f{bs.cost_item.disp_name}§r§ex{bs.cost_count} §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str}"
                 )
 
         def _page_cb(_, page: int):
@@ -337,49 +319,48 @@ def show_buy_and_sell(
                 + "\n§r§b扔雪球切换 §f| §a抬头购买 §f| §c低头退出"
             )
 
-        res = self.snowmenu.simple_select(player, _page_cb, last_page)
+        res = sys.snowmenu.simple_select(player, _page_cb, last_page)
         if res is None:
             break
         last_page = res
-        (
-            buyitem,
-            buycount,
-            sellitem,
-            sellcount,
-            buycount_max,
-            buycd,
-        ) = new_buys_and_sells[res]
-        left, cdmin_time = self.get_shop_left2cd(
-            player, shop_name, sellitem.id, sellcount, buyitem.id, buycount
-        )
+        buy_arg = new_buys_and_sells[res]
+        left, cdmin_time = sys.get_shop_left2cd(player, shop_name, buy_arg.tag)
         if left is None or cdmin_time == 0:
-            left = buycount_max
+            left = buy_arg.once_limit
         if cdmin_time > 0 and left <= 0:
-            self.rpg.show_fail(player, "无法购买未补货或售罄的商品")
+            sys.rpg.show_fail(player, "无法购买未补货或售罄的商品")
             continue
         elif (
-            player_have := self.rpg.backpack_holder.getItemCount(player, buyitem.id)
-        ) < buycount:
-            self.rpg.show_fail(
+            player_have := sys.rpg.backpack_holder.getItemCount(
+                player, buy_arg.cost_item.id
+            )
+        ) < buy_arg.cost_count:
+            sys.rpg.show_fail(
                 player,
-                f"需要的物品不足 §6（§f{buyitem.show_name}§6： §c{player_have}§7/§f{buycount}§6）",
+                f"需要的物品不足 §6（§f{buy_arg.cost_item.disp_name}§6： §c{player_have}§7/§f{buy_arg.cost_count}§6）",
             )
             continue
-        self.rpg.backpack_holder.clearItem(player, buyitem.id, buycount)
-        self.rpg.backpack_holder.giveItems(
-            player, self.rpg.item_holder.createItems(sellitem.id, sellcount)
+        sys.rpg.backpack_holder.clearItem(
+            player, buy_arg.cost_item.id, buy_arg.cost_count
         )
+        if isinstance(buy_arg, ShopSellMeta):
+            sys.rpg.backpack_holder.giveItem(player, buy_arg.sell_item.copy())
+        else:
+            sys.rpg.backpack_holder.giveItems(
+                player,
+                sys.rpg.item_holder.createItems(
+                    buy_arg.sell_item.id, buy_arg.sell_count
+                ),
+            )
         left -= 1
         if cdmin_time > 0:
             buycd = cdmin_time
-        self.set_shop_left2cddata(
-            player, shop_name, sellitem.id, sellcount, buyitem.id, buycount, left, buycd
-        )
-        bought.append((buyitem, sellcount, sellitem, buycount))
+        else:
+            buycd = buy_arg.cooldown_min
+        sys.set_shop_left2cddata(player, shop_name, buy_arg.tag, left, buycd)
+        bought.append(buy_arg.copy())
         get_system().BroadcastEvent(
-            PlayerTradingWithNPCEvent(
-                player, buyitem, buycount, sellitem, sellcount
-            ).to_broadcast()
+            PlayerTradingWithNPCEvent(player, buy_arg).to_broadcast()
         )
     return bought
 

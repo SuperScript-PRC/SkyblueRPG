@@ -229,6 +229,7 @@ class CustomRPGSource(Plugin):
     ):
         x, y, z = xyz
         try:
+            # item_tagname, item_count, hard, cd_min
             utils.fill_list_index(args, ["", "1", "5", "280"])
             item_tagname = args[0]
             item_count = int(args[1])
@@ -246,6 +247,7 @@ class CustomRPGSource(Plugin):
             )
         except Exception as err:
             player.show(f"§c设置失败： {err}")
+            return
         self.set_command_block(src_point)
         player.show("§a设置成功")
 

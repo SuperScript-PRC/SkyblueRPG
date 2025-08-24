@@ -14,7 +14,6 @@ class CombatHandler:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
         self.game_ctrl = sys.game_ctrl
-        self.display_holder = sys.display_holder
         self.player_holder = sys.player_holder
         self.entity_holder = sys.entity_holder
         self.mob_holder = sys.mob_holder
@@ -23,6 +22,7 @@ class CombatHandler:
 
     def activate(self):
         cb2bot = self.sys.cb2bot
+        self.display_holder = self.sys.display_holder
         cb2bot.regist_message_cb(r"sr.skill.loaded", self._handle_player_set_skill)
         cb2bot.regist_message_cb(r"sr.ult.loaded", self._handle_player_set_ult)
         cb2bot.regist_message_cb(
@@ -126,7 +126,12 @@ class CombatHandler:
         # 玩家攻击实体
 
     def player_attack_mob(self, playerinf: PlayerEntity, mob: MobEntity):
-        playerinf.attack(mob)
+        atks, is_crit, _ = playerinf.attack(mob)
+        self.BroadcastEvent(
+            event_apis.PlayerAttackMobEvent(
+                playerinf, mob, constants.AttackType.NORMAL, atks, is_crit
+            ).to_broadcast()
+        )
         self.ensure_kill_handler(playerinf, mob)
         playerinf.player.setTitle("§a")
         self.display_holder.display_charge_to_player(playerinf)
@@ -143,7 +148,14 @@ class CombatHandler:
             return
         playerinf = self.player_holder.get_playerinfo(player)
         self.entity_holder.set_main_target(playerinf, mob)
-        mob.attack(playerinf, constants.SrcType.NORMAL, constants.AttackType.NORMAL)
+        atks = mob.attack(
+            playerinf, constants.SrcType.NORMAL, constants.AttackType.NORMAL
+        )
+        self.BroadcastEvent(
+            event_apis.MobAttackPlayerEvent(
+                playerinf, mob, constants.AttackType.NORMAL, atks
+            ).to_broadcast()
+        )
         self.entity_holder.update_last_hp(playerinf)
         self.entity_holder.update_last_hp(mob)
         self.ensure_kill_handler(mob, playerinf)
@@ -151,12 +163,21 @@ class CombatHandler:
     # 玩家攻击玩家
     def player_attack_player(self, playerinf: PlayerEntity, playerinf_2: PlayerEntity):
         if not playerinf.pvp:
-            playerinf.player.setActionbar("§4✗ §c无法攻击玩家， 请在菜单设置内打开 PVP 模式")
+            playerinf.player.setActionbar(
+                "§4✗ §c无法攻击玩家， 请在菜单设置内打开 PVP 模式"
+            )
             return
         elif not playerinf_2.pvp:
-            playerinf.player.setActionbar("§4✗ §c对方未开启 PVP 模式， 可在菜单设置内打开")
+            playerinf.player.setActionbar(
+                "§4✗ §c对方未开启 PVP 模式， 可在菜单设置内打开"
+            )
             return
-        playerinf.attack(playerinf_2)
+        atks, is_crit, _ = playerinf.attack(playerinf_2)
+        self.BroadcastEvent(
+            event_apis.PlayerAttackPlayerEvent(
+                playerinf, playerinf_2, constants.AttackType.NORMAL, atks, is_crit
+            ).to_broadcast()
+        )
         self.entity_holder.update_last_hp(playerinf)
         self.entity_holder.update_last_hp(playerinf_2)
         self.ensure_kill_handler(playerinf, playerinf_2)
@@ -164,30 +185,31 @@ class CombatHandler:
 
     # 在每个有可能造成目标死亡的事件下调用
     def ensure_kill_handler(self, killer: "ENTITY", killed: "ENTITY"):
-        if isinstance(killer, PlayerEntity):
-            if killed.is_died():
-                if isinstance(killed, MobEntity):
-                    self.sys.tutor.check_point(
-                        "自定义RPG:击杀生物", killer.player, killed
-                    )
-                    self.BroadcastEvent(
-                        event_apis.PlayerKillMobEvent(killer, killed).to_broadcast()
-                    )
-                elif isinstance(killed, PlayerEntity):
-                    self.sys.tutor.check_point(
-                        "自定义RPG:击杀玩家", killer.player, killed
-                    )
-                    self.BroadcastEvent(
-                        event_apis.PlayerKillPlayerEvent(killer, killed).to_broadcast()
-                    )
-                    killed.recover()
-        elif isinstance(killer, MobEntity):
-            if killed.is_died():
-                if isinstance(killed, PlayerEntity):
-                    self.BroadcastEvent(
-                        event_apis.MobKillPlayerEvent(killed, killer).to_broadcast()
-                    )
-                    killed.recover()
+        pass
+    #     if isinstance(killer, PlayerEntity):
+    #         if killed.is_died():
+    #             if isinstance(killed, MobEntity):
+    #                 self.sys.tutor.check_point(
+    #                     "自定义RPG:击杀生物", killer.player, killed
+    #                 )
+    #                 self.BroadcastEvent(
+    #                     event_apis.PlayerKillMobEvent(killer, killed).to_broadcast()
+    #                 )
+    #             elif isinstance(killed, PlayerEntity):
+    #                 self.sys.tutor.check_point(
+    #                     "自定义RPG:击杀玩家", killer.player, killed
+    #                 )
+    #                 self.BroadcastEvent(
+    #                     event_apis.PlayerKillPlayerEvent(killer, killed).to_broadcast()
+    #                 )
+    #                 killed.recover()
+    #     elif isinstance(killer, MobEntity):
+    #         if killed.is_died():
+    #             if isinstance(killed, PlayerEntity):
+    #                 self.BroadcastEvent(
+    #                     event_apis.MobKillPlayerEvent(killed, killer).to_broadcast()
+    #                 )
+    #                 killed.recover()
 
     # 处理玩家设置技能
     def _handle_player_set_skill(self, dats: list[str]):
@@ -204,7 +226,7 @@ class CombatHandler:
 
     # 处理玩家切换武器
     def _handle_player_switch_weapon(self, dats: list[str]):
-        self.sys.menu_gui._player_switch_weapon(self.sys.getPlayer(dats[0]))
+        self.sys.snowmenu_gui._player_switch_weapon(self.sys.getPlayer(dats[0]))
 
     # 处理玩家设置终结技
     def _handle_player_set_ult(self, dats: list[str]):

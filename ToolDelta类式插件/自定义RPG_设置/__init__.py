@@ -56,6 +56,18 @@ available_settings = [
         ["§c关闭", "§b打字机", "§6蜂鸣器", "§a村民"],
         1,
     ),
+    Setting(
+        "rpg_power_tips",
+        "蔚源获取提示",
+        ["§c关闭", "§a打开"],
+        1,
+    ),
+    Setting(
+        "rpg_qq_notify",
+        "进退游戏群播报",
+        ["§c关闭", "§a打开"],
+        1,
+    ),
     # Setting("sfx", "剧情背景音效", ["§c关闭", "§a打开"], 1),
     # Setting("textfield_size", "剧情文本框尺寸", ["40", "60", "80"], 1),
 ]

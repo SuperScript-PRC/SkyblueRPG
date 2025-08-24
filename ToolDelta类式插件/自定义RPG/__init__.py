@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import traceback
 import importlib
 import threading
@@ -23,6 +24,7 @@ from . import (
     mob_holder,
     entity_holder,
     item_holder,
+    qq_holder,
     combat_handler,
     menu_cmds,
     snowball_gui,
@@ -67,6 +69,7 @@ for module in (
     mob_holder,
     entity_holder,
     item_holder,
+    qq_holder,
     combat_handler,
     menu_cmds,
     snowball_gui,
@@ -74,6 +77,7 @@ for module in (
     importlib.reload(module)
 
 RPG_Lock = threading.RLock()
+LOG = True
 
 
 class CustomRPG(Plugin):
@@ -131,6 +135,7 @@ class CustomRPG(Plugin):
             "材料物品配置",
         ):
             os.makedirs(os.path.join(self.data_path, dirname), exist_ok=True)
+        self.set_logger()
         self.ListenPreload(self.on_def)
         self.ListenActive(self.on_inject)
         self.ListenPlayerJoin(self.on_player_join)
@@ -144,6 +149,7 @@ class CustomRPG(Plugin):
         self.ntag = self.GetPluginAPI("头衔系统")
         self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
         self.rpg_settings = self.GetPluginAPI("自定义RPG-设置")
+        self.rpg_quests = self.GetPluginAPI("自定义RPG-剧情与任务")
         self.tutor = self.GetPluginAPI("自定义RPG-教程")
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
@@ -156,6 +162,7 @@ class CustomRPG(Plugin):
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
             from ..雪球菜单v3 import SnowMenuV3
             from ..自定义RPG_升级系统 import CustomRPGUpgrade
+            from ..自定义RPG_剧情与任务 import CustomRPGPlotAndTask
             from ..自定义RPG_教程 import CustomRPGTutorial
             from ..自定义RPG_设置 import CustomRPGSettings
             from ..虚拟背包 import VirtuaBackpack
@@ -170,34 +177,50 @@ class CustomRPG(Plugin):
             self.backpack: VirtuaBackpack
             self.rpg_upgrade: CustomRPGUpgrade
             self.rpg_settings: CustomRPGSettings
+            self.rpg_quests: CustomRPGPlotAndTask
         SlotItem = self.backpack.SlotItem
         Item = self.backpack.Item
 
-        self.backpack_holder = backpack_holder.BackpackHolder(self)
-        self.display_holder = display_holder.DisplayHolder(self)
-        self.path_holder = path_holder.PathHolder(self)
-        self.player_holder = player_holder.PlayerHolder(self)
-        self.mob_holder = mob_holder.MobHolder(self)
-        self.entity_holder = entity_holder.EntityHolder(self)
-        self.item_holder = item_holder.ItemHolder(self)
-        self.combat_handler = combat_handler.CombatHandler(self)
+        self.qq_holder = qq_holder.QQHolder(self)
         self.menu_cmds = menu_cmds.MenuCommands(self)
-        self.menu_gui = snowball_gui.CustomRPGGUI(self)
+        self.mob_holder = mob_holder.MobHolder(self)
+        self.item_holder = item_holder.ItemHolder(self)
+        self.path_holder = path_holder.PathHolder(self)
+        self.snowmenu_gui = snowball_gui.SnowmenuGUI(self)
+        self.entity_holder = entity_holder.EntityHolder(self)
+        self.player_holder = player_holder.PlayerHolder(self)
+        self.combat_handler = combat_handler.CombatHandler(self)
+        self.display_holder = display_holder.DisplayHolder(self)
+        self.backpack_holder = backpack_holder.BackpackHolder(self)
         scripts_loader.load_all(self)
         self.item_holder.init()
+        self.qq_holder.init()
 
         # self.cb2bot.regist_message_cb(
         #     r"sr.nearest.entities", self.handle_nearest_entities_cb
         # )
 
+    def set_logger(self):
+        self.logger = logging.Logger("自定义RPG")
+        self.logger.setLevel(logging.DEBUG)
+        fhdl = logging.FileHandler(self.data_path / "logs.log", mode="a")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(filename)s[ln:%(lineno)d]: %(message)s"
+        )
+        fhdl.setFormatter(formatter)
+        self.logger.addHandler(fhdl)
+
     def if_kick_player(self, player: Player, sleep=False):
-        # return False
-        if not player.is_op():
+        return False
+        if (
+            not player.is_op()
+            and getattr(self.frame.launcher, "serverNumber") == 59141823
+        ):
             if sleep:
                 time.sleep(3)
             self.game_ctrl.sendwocmd(
                 f"kick {player.safe_name} §a\n§7[§cError§7]\n§c抱歉， 租赁服暂未开放， 您无法获得进入资格。"
-                "\n§d您可以查看我们的交流Q 750432518 获得终测资讯。\n§6最新开启时间： 08-17 10：00， "
+                "\n§d您可以查看我们的交流Q 750432518 获得终测资讯。\n§6最新开启时间： 08-22 20： 30， "
                 + time.strftime(
                     "§b当前 %y 年 %m 月 %d日 %H： %M： %S", time.localtime()
                 )
@@ -216,8 +239,9 @@ class CustomRPG(Plugin):
         self.display_holder.activate()
         self.combat_handler.activate()
         self.menu_cmds.prepare_chatbarmenu()
-        self.menu_gui.enable_snowmenu()
+        self.snowmenu_gui.enable_snowmenu()
         self.init_need_init_cmds()
+        self.on_timer_save_playerdatas()
         with RPG_Lock:
             try:
                 for player in self.game_ctrl.players:
@@ -227,42 +251,25 @@ class CustomRPG(Plugin):
             except Exception:
                 fmts.print_err(traceback.format_exc())
             self.print("§a玩家数据均已初始化")
+        self.show_any("@a", "a", "蔚蓝空域系统 重载成功")
 
     @utils.thread_func("自定义RPG:玩家进入")
     def on_player_join(self, player: Player):
         if self.if_kick_player(player, sleep=True):
             return
-        with RPG_Lock:
-            self.init_game_player(player)
+        self.load_player(player)
+        if LOG:
             basic = self.player_holder.get_player_basic(player)
-            weapon_uuid = basic.mainhand_weapons_uuid[0]
-            titl = self.ntag.get_current_nametitle(player.name)
-            if titl is None:
-                format_title_text = ""
-            else:
-                format_title_text = (
-                    "§f『" + self.ntag.get_titles().get(titl, "???") + "§r§f』 "
-                )
-            if weapon_uuid is None:
-                format_weapon_txt = ""
-            else:
-                weapon_item = self.backpack_holder.getItem(player, weapon_uuid)
-                assert weapon_item
-                format_weapon_txt = f"提着 {weapon_item.item.show_name} "
-            format_level_text = (
-                "§7<§f"
-                + self.bigchar.replaceBig("Lv.")
-                + "§a"
-                + self.bigchar.replaceBig(str(basic.Level))
-                + "§7>"
-            )
-            self.show_any(
-                "@a",
-                "a",
-                f"{format_level_text} {format_title_text}§e{player.name}§f {format_weapon_txt}§r§a上线了",
+            self.logger.info(
+                f"{player.name} inited: level={basic.Level} exp={basic.Exp}"
             )
 
     def on_player_leave(self, player: Player):
+        if LOG and player in self.player_holder.loaded_player_basic_data:
+            basic = self.player_holder.get_player_basic(player)
+            self.logger.info(
+                f"{player.name} unloaded: level={basic.Level} exp={basic.Exp}"
+            )
         with RPG_Lock:
             self.unload_player(player)
 
@@ -270,6 +277,13 @@ class CustomRPG(Plugin):
         for player in self.frame.get_players().getAllPlayers():
             self.player_holder.remove_player(player)
         fmts.print_suc("自定义RPG: 全部数据已保存")
+
+    @utils.timer_event(480, "玩家数据定时保存")
+    def on_timer_save_playerdatas(self):
+        if not self.player_holder.initialized:
+            return
+        for player in self.game_ctrl.players:
+            self.player_holder.save_game_player_data(player)
 
     ##### 事件初始化 #####
     @utils.thread_func("初始化 SkyblueRPG系统")
@@ -285,8 +299,8 @@ class CustomRPG(Plugin):
         fmts.print_suc("SkyblueRPG 初始化成功.")
 
     # 初始化玩家数据
-    def init_game_player(self, player: Player):
-        playerinf = self.player_holder.add_player(player)
+    def init_game_player(self, player: Player, init=False):
+        playerinf = self.player_holder.add_player(player, init)
         if playerinf.weapon:
             self.game_ctrl.sendwocmd(
                 r"replaceitem entity @a[name="
@@ -298,6 +312,37 @@ class CustomRPG(Plugin):
         )
         fmts.print_suc(f"玩家已加载: {player.name}")
 
+    def load_player(self, player: Player):
+        with RPG_Lock:
+            self.init_game_player(player, init=True)
+            basic = self.player_holder.get_player_basic(player)
+            weapon_uuid = basic.mainhand_weapons_uuid[0]
+            titl = self.ntag.get_current_nametitle(player.name)
+            if titl is None:
+                format_title_text = ""
+            else:
+                format_title_text = (
+                    "§f『" + self.ntag.get_titles().get(titl, "???") + "§r§f』 "
+                )
+            if weapon_uuid is None:
+                format_weapon_txt = ""
+            else:
+                weapon_item = self.backpack_holder.getItem(player, weapon_uuid)
+                assert weapon_item
+                format_weapon_txt = f"提着 {weapon_item.disp_name} "
+            format_level_text = (
+                "§7<§f"
+                + self.bigchar.replaceBig("Lv.")
+                + "§a"
+                + self.bigchar.replaceBig(str(basic.Level))
+                + "§7>"
+            )
+            self.show_any(
+                "@a",
+                "a",
+                f"{format_level_text} {format_title_text}§e{player.name}§f {format_weapon_txt}§r§a上线了",
+            )
+
     # 玩家退出处理
     def unload_player(self, player: Player):
         if basic := self.player_holder.loaded_player_basic_data.get(player):
@@ -307,7 +352,7 @@ class CustomRPG(Plugin):
             else:
                 weapon_item = self.backpack_holder.getItem(player, weapon_uuid)
                 assert weapon_item
-                format_weapon_txt = f"提着 {weapon_item.item.show_name} "
+                format_weapon_txt = f"提着 {weapon_item.disp_name} "
             titl = self.ntag.get_current_nametitle(player.name)
             if titl is None:
                 format_title_text = ""
@@ -329,7 +374,7 @@ class CustomRPG(Plugin):
             )
         else:
             fmts.print_war(f"玩家 {player.name} 没有被加载到 SkyblueRPG")
-        self.player_holder.remove_player(player)
+        self.player_holder.remove_player(player, True)
 
     def show_succ(self, player: Player, msg):
         player.show(f"§a┃ {msg}")

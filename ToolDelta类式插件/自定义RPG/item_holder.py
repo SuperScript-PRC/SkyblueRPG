@@ -75,8 +75,8 @@ class ItemHolder:
         loaded_materials: dict[str, "Item"] = {}
         items_starlevel: dict[str, int] = {}
 
-        def weapon_description_closure(desc: str):
-            def _get_weapon_description(weapon: "SlotItem"):
+        def get_weapon_description_wrapper(desc: str):
+            def _weapon_description_wrapper(weapon: "SlotItem"):
                 max_durability = find_weapon_class(weapon.item.id).default_durability
                 metadata = weapon.metadata
                 atks = metadata["ATKs"]
@@ -111,9 +111,18 @@ class ItemHolder:
                     + desc
                 )
 
-            return _get_weapon_description
+            return _weapon_description_wrapper
 
-        def relic_description_closure(cls: type[Relic], desc: str):
+        def get_relic_name_wrapper(name: str):
+            def _relic_name_wrapper(slotitem: "SlotItem"):
+                o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '???')}>"
+                if slotitem.metadata.get("trash", False):
+                    o += "§7<§c☒§7>"
+                return o
+
+            return _relic_name_wrapper
+
+        def get_relic_description_wrapper(cls: type[Relic], desc: str):
             suit_2nd_fmt_pre = split_by_display_len(
                 "§6二件套： " + cls.suit_2nd_description or "无", 40
             )
@@ -121,7 +130,7 @@ class ItemHolder:
                 "§6四件套： " + cls.suit_4th_description or "无", 40
             )
 
-            def _get_relic_description(weapon: "SlotItem"):
+            def _relic_description_wrapper(weapon: "SlotItem"):
                 metadata = weapon.metadata
                 lv = metadata["Lv"]
                 main_props = metadata["Main"].items()
@@ -147,7 +156,7 @@ class ItemHolder:
                     + desc
                 )
 
-            return _get_relic_description
+            return _relic_description_wrapper
 
         # 材料物品
         std_cfg = default_cfg.get_material_cfg_standard()
@@ -173,7 +182,7 @@ class ItemHolder:
                 weapon_name,
                 weapon_cls.show_name,
                 [weapon_cls.category.to_category()],
-                description=weapon_description_closure(weapon_cls.description),
+                description=get_weapon_description_wrapper(weapon_cls.description),
                 stackable=False,
             )
             loaded_weapons[weapon_name] = item
@@ -183,14 +192,16 @@ class ItemHolder:
         for relic_name, relic_cls in get_registered_relics().items():
             item = self.sys.backpack.Item(
                 id=relic_name,
-                show_name=relic_cls.show_name,
+                disp_name=get_relic_name_wrapper(relic_cls.show_name),
                 categories=[
                     t.to_full_display_category(relic_cls.category)
                     for t in relic_cls.types
                 ]
                 + [t.to_hidden_category() for t in relic_cls.types],
                 stackable=False,
-                description=relic_description_closure(relic_cls, relic_cls.description),
+                description=get_relic_description_wrapper(
+                    relic_cls, relic_cls.description
+                ),
             )
             loaded_relics[relic_name] = item
             items_starlevel[relic_name] = relic_cls.star_level
@@ -206,10 +217,9 @@ class ItemHolder:
         self, item_tag_name: str, count: int = 1, metadata: dict | None = None
     ):
         res: list["SlotItem"] = []
-        SlotItem = self.sys.backpack.SlotItem
         if item_tag_name in self.loaded_materials.keys():
             res.append(
-                SlotItem(
+                self.sys.backpack.SlotItem(
                     self.get_material_info(item_tag_name),
                     count,
                     metadata=metadata or {},
@@ -248,13 +258,13 @@ class ItemHolder:
                     )
                     new_metadata.update({"Lv": 1, "Exp": 0})
                     res.append(
-                        SlotItem(relic_item, 1, metadata=metadata or new_metadata)
+                        self.sys.backpack.SlotItem(relic_item, 1, metadata=metadata or new_metadata)
                     )
         else:
             item = self.backpack.get_registed_item(item_tag_name)
             if item is None:
                 raise ValueError(f"物品不存在: {item_tag_name}")
-            return [SlotItem(item, count)]
+            return [self.sys.backpack.SlotItem(item, count)]
         return res
 
     def createItem(self, tag_name: str, count: int = 1, metadata: dict | None = None):

@@ -159,7 +159,10 @@ class CustomRPGFishing(Plugin):
     @utils.thread_func("自定义RPG-钓鱼上钩")
     def hook_ok(self, args):
         (hook_uuid,) = args
-        x, y, z = game_utils.getPosXYZ(f"@e[scores={{fish:uuid={hook_uuid}}}]")
+        try:
+            x, y, z = game_utils.getPosXYZ(f"@e[scores={{fish:uuid={hook_uuid}}}]")
+        except ValueError:
+            return
         nearestPlayer = game_utils.getTarget(f"@a[x={x},y={y},z={z},c=1]")[0]
         in_pool = self.find_pool(x, y, z)
         if in_pool:
@@ -200,14 +203,14 @@ class CustomRPGFishing(Plugin):
             event_apis.PlayerFishHookedEvent(player, hooked_item, True).to_broadcast()
         )
         self.rpg.backpack_holder.giveItems(player, hooked_item, False)
-        item = hooked_item[0].item
+        item = hooked_item[0]
         player.show(
-            f"§b┃ ☬ §3你钓到了 §7<{self.rpg.item_holder.make_item_starlevel(item.id)}§7> §f{item.show_name}",
+            f"§b┃ ☬ §3你钓到了 §7<{self.rpg.item_holder.make_item_starlevel(item.item.id)}§7> §f{item.disp_name}",
         )
         if self.rpg.item_holder.get_item_starlevel(final_section) >= 3:
             self.game_ctrl.say_to(
                 f'@a[name=!"{player.name}"]',
-                f"§b┃ ☬ §b{player.name} §3钓到了 §7<{self.rpg.item_holder.make_item_starlevel(item.id)}§7> §f{item.show_name}",
+                f"§b┃ ☬ §b{player.name} §3钓到了 §7<{self.rpg.item_holder.make_item_starlevel(item.item.id)}§7> §f{item.disp_name}",
             )
         if bait:
             if random.random() > bait.reduce:

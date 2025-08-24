@@ -46,6 +46,8 @@ class ModelType(IntEnum):
     SHOVEL = 24
     # BOW = 36
     # TRIDENT = 48
+    FISHING_ROD = 50
+    # 钓鱼竿
 
 
 class Category(str, Enum):

@@ -64,11 +64,11 @@ class CustomRPGFood(Plugin):
             self.rpg.backpack_holder.clearItem(
                 player, food.tag_name, 1, show_to_player=False
             )
-            self.rpg.rpg_upgrade.add_player_exp(player, 1)
-            player.show("§a┃ §e吃到了美味的食物， 你的经验增加了！")
+            # self.rpg.rpg_upgrade.add_player_exp(player, 1)
+            player.show("§a┃ §e吃到了美味的食物。")
         else:
             player.show(
-                f"§a┃ {self.rpg.item_holder.getOrigItem(food.tag_name).show_name} §r§e味道不错。"
+                f"§a┃ {self.rpg.item_holder.getOrigItem(food.tag_name).disp_name} §r§e味道不错。"
             )
         if self.rpg.backpack_holder.getItemCount(player, food.tag_name) <= 0:
             self.rpg.show_warn(player, "你手上的食物被吃完了..")
@@ -94,7 +94,7 @@ class CustomRPGFood(Plugin):
         if self.food_loaded.get(player) is None:
             food = self.load_food_from_basic(player, slotitem.uuid)
             self.rpg.show_succ(
-                player, f"现在可在物品栏食用 §f{slotitem.item.show_name}"
+                player, f"现在可在物品栏食用 §f{slotitem.disp_name}"
             )
             self.rpg.show_inf(player, "再次使用可以将食物放回背包")
             self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
@@ -105,7 +105,7 @@ class CustomRPGFood(Plugin):
             food = self.food_loaded[player] = food_frame.get_food_cls_by_tagname(
                 food_id
             )(playerinf)
-            self.rpg.show_inf(player, f"物品栏的食物换成了 §f{slotitem.item.show_name}")
+            self.rpg.show_inf(player, f"物品栏的食物换成了 §f{slotitem.disp_name}")
             self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
                 slotitem.uuid
             )
@@ -114,7 +114,7 @@ class CustomRPGFood(Plugin):
             del self.food_loaded[player]
             self.set_food_to_hotbar(player, None)
             self.rpg.show_inf(
-                player, f"你把 §f{slotitem.item.show_name} §r§f放回了背包中"
+                player, f"你把 §f{slotitem.disp_name} §r§f放回了背包中"
             )
             self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
                 None

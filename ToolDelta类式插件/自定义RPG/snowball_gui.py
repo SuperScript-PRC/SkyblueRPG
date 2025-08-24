@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from . import CustomRPG, SlotItem
 
 
-class CustomRPGGUI:
+class SnowmenuGUI:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
         self.game_ctrl = sys.game_ctrl
@@ -85,9 +85,9 @@ class CustomRPGGUI:
                         )
                     else:
                         single += (
-                            f"\n§r§f➣ §f§l[{ind2 + 1}] {slotitem.item.show_name}"
+                            f"\n§r§f➣ §f§l[{ind2 + 1}] {slotitem.disp_name}"
                             if ind == ind2
-                            else f"\n§r§8➣ §7[{ind2 + 1}] {slotitem.item.show_name}"
+                            else f"\n§r§8➣ §7[{ind2 + 1}] {slotitem.disp_name}"
                         )
                 selected_item = items[ind]
                 if selected_item is not None:
@@ -108,7 +108,13 @@ class CustomRPGGUI:
                 if item_sel is None:
                     res = self.gui.simple_select_dict(
                         player,
-                        {0: "§7| <§c§o!§r§7>§6槽位为空§7 |\n §f<装备道具>\n §7<...>"},
+                        {
+                            0: f"§7槽位 [§f{res_slot + 1}§7] §6空槽位\n §f➣ §l装备武器§r§f"
+                            + " " * 30
+                            + "\n§7   ..."
+                            + "\n§a" * 6
+                            + "§a抬头确认 §7| §c低头取消"
+                        },
                     )
                     if res is not None:
                         swap_item_uuids = [i for i in old_mainhand_weapons_uuid if i]
@@ -124,9 +130,9 @@ class CustomRPGGUI:
 
                         def _cb1(x: "SlotItem"):
                             return (
-                                f"◈ {x.item.show_name} §r§7(交换)"
+                                f"◈ {x.disp_name} §r§7(交换)"
                                 if x.uuid in swap_item_uuids
-                                else "◈ " + x.item.show_name
+                                else "◈ " + x.disp_name
                             )
 
                         res1 = self.check_items(
@@ -156,7 +162,7 @@ class CustomRPGGUI:
                         old_mainhand_weapons_uuid[res_slot] = res1.uuid
                         self.sys.show_succ(
                             player,
-                            f"已将 §f<{res1.item.show_name}§r§f> §a放入主手槽位",
+                            f"已将 §f<{res1.disp_name}§r§f> §a放入主手槽位",
                         )
                         self.sys.display_holder.display_weapon_to_player(player, res1)
                         self.sys.tutor.check_point("自定义RPG:装备武器", player, res1)
@@ -172,9 +178,7 @@ class CustomRPGGUI:
                     def _cb(_, page: int):
                         if page > 1:
                             return None
-                        header = (
-                            f"§7槽位 [§f{res_slot + 1}§7]  §f{item_sel.item.show_name}"
-                        )
+                        header = f"§7槽位 [§f{res_slot + 1}§7]  §f{item_sel.disp_name}"
                         if page > 1:
                             return None
                         match page:
@@ -233,9 +237,9 @@ class CustomRPGGUI:
 
                                 def _cb1(x: "SlotItem"):
                                     return (
-                                        f"◈ {x.item.show_name} §r§7(交换)"
+                                        f"◈ {x.disp_name} §r§7(交换)"
                                         if x.uuid in swap_item_uuids
-                                        else "◈ " + x.item.show_name
+                                        else "◈ " + x.disp_name
                                     )
 
                                 res1 = self.check_items(
@@ -250,7 +254,7 @@ class CustomRPGGUI:
                                 old_mainhand_weapons_uuid[res_slot] = res1.uuid
                                 self.sys.show_succ(
                                     player,
-                                    f"已更改槽位道具至 {res1.item.show_name}",
+                                    f"已更改槽位道具至 {res1.disp_name}",
                                 )
                                 self.game_ctrl.sendwocmd(
                                     f"replaceitem entity {player.safe_name} slot.hotbar 0 air"
@@ -266,6 +270,8 @@ class CustomRPGGUI:
             player.show(f"§c{err}")
             raise
         finally:
+            if not self.sys.player_holder.player_online(player):
+                return
             playerinf = self.sys.player_holder.get_playerinfo(player)
             self.sys.player_holder.get_player_basic(
                 player
@@ -314,10 +320,10 @@ class CustomRPGGUI:
             else:
                 desc_format = nowitem.item.description(nowitem)  # type: ignore
                 opt_menu_pages = [
-                    nowitem.item.show_name
+                    nowitem.disp_name
                     + " §r§f➭卸下道具 §8➭切换道具  §a抬头选择 §f| §c低头退出\n"
                     + desc_format,
-                    nowitem.item.show_name
+                    nowitem.disp_name
                     + " §r§8➭卸下道具 §f➭切换道具  §a抬头选择 §f| §c低头退出\n"
                     + desc_format,
                 ]
@@ -377,18 +383,18 @@ class CustomRPGGUI:
                     if page >= 8:
                         return None
                     empty = "§7空"
-                    a0 = shead.item.show_name if shead else empty
-                    a1 = schest.item.show_name if schest else empty
-                    a2 = slegs.item.show_name if slegs else empty
-                    a3 = sfeet.item.show_name if sfeet else empty
-                    a4 = slA.item.show_name if slA else empty
-                    a5 = slB.item.show_name if slB else empty
-                    a6 = slC.item.show_name if slC else empty
-                    a7 = slD.item.show_name if slD else empty
+                    a0 = shead.disp_name if shead else empty
+                    a1 = schest.disp_name if schest else empty
+                    a2 = slegs.disp_name if slegs else empty
+                    a3 = sfeet.disp_name if sfeet else empty
+                    a4 = slA.disp_name if slA else empty
+                    a5 = slB.disp_name if slB else empty
+                    a6 = slC.disp_name if slC else empty
+                    a7 = slD.disp_name if slD else empty
                     alft = rpg_utils.align_left
                     glc = rpg_utils.get_last_color
                     T = 34
-                    T2 = 14
+                    T2 = 20
                     format_dict = {
                         f"a{i}": "§b" if page == i else "§7" for i in range(8)
                     }
@@ -455,7 +461,7 @@ class CustomRPGGUI:
                                 continue
                             temp_slots[res] = item_need_op
                             self.sys.show_succ(
-                                player, f"已装备 {item_need_op.item.show_name}"
+                                player, f"已装备 {item_need_op.disp_name}"
                             )
                             self.sys.tutor.check_point(
                                 "自定义RPG:装备护甲", player, item_need_op
@@ -463,13 +469,13 @@ class CustomRPGGUI:
                         elif choice == 1:
                             temp_slots[res] = None
                             self.sys.show_succ(
-                                player, f"已卸下 {item_need_op.item.show_name}"
+                                player, f"已卸下 {item_need_op.disp_name}"
                             )
                             self.sys.tutor.check_point("自定义RPG:卸下护甲", player)
                         elif choice == 2:
                             self.sys.show_succ(
                                 player,
-                                f"已将 {temp_slots[res].item.show_name}§r§a 更换成 {item_need_op.item.show_name}",  # type: ignore (always a item)
+                                f"已将 {temp_slots[res].disp_name}§r§a 更换成 {item_need_op.disp_name}",  # type: ignore (always a item)
                             )
                             temp_slots[res] = item_need_op
                         player_basic.relics_uuid[:4] = [
@@ -500,7 +506,7 @@ class CustomRPGGUI:
                         if choice == 0:
                             temp_slots[res - 4] = item_need_op
                             self.sys.show_succ(
-                                player, f"已装备 {item_need_op.item.show_name}"
+                                player, f"已装备 {item_need_op.disp_name}"
                             )
                             self.sys.tutor.check_point(
                                 "自定义RPG:装备饰品", player, item_need_op
@@ -508,13 +514,13 @@ class CustomRPGGUI:
                         elif choice == 1:
                             temp_slots[res - 4] = None
                             self.sys.show_succ(
-                                player, f"已卸下 {item_need_op.item.show_name}"
+                                player, f"已卸下 {item_need_op.disp_name}"
                             )
                             self.sys.tutor.check_point("自定义RPG:卸下饰品", player)
                         elif choice == 2:
                             self.sys.show_succ(
                                 player,
-                                f"已将 {temp_slots[res - 4].item.show_name}§r§a 更换成 {item_need_op.item.show_name}",  # type: ignore (always a item)
+                                f"已将 {temp_slots[res - 4].disp_name}§r§a 更换成 {item_need_op.disp_name}",  # type: ignore (always a item)
                             )
                             temp_slots[res - 4] = item_need_op
                         player_basic.relics_uuid[4:] = [
@@ -562,9 +568,10 @@ class CustomRPGGUI:
         if wp_uuid := playerbas.mainhand_weapons_uuid[0]:
             weapon_item = self.sys.backpack_holder.getItem(playerinf.player, wp_uuid)
             assert weapon_item, f"{player.name}的主手物品未找到: {wp_uuid}"
-            player.setActionbar(f"§7武器已切换为 {weapon_item.item.show_name}")
+            player.setActionbar(f"§7武器已切换为 {weapon_item.disp_name}")
         else:
             player.setActionbar("§7武器已切换为 §6无")
+        self.sys.display_holder._display_skill_cd_to_player_single(playerinf)
 
     @utils.thread_func("玩家检查面板")
     def _player_check_panel_simple(self, player: Player):
@@ -596,8 +603,7 @@ class CustomRPGGUI:
         player: Player,
         items: list["SlotItem"],
         menu_header: str = "§7§l[§6■§7] §r§6请选择物品§f\n",
-        display_column_cb: Callable[["SlotItem"], str] = lambda x: "- "
-        + x.item.show_name,
+        display_column_cb: Callable[["SlotItem"], str] = lambda x: "- " + x.disp_name,
     ) -> "SlotItem | None":
         menu_pgs = {}
         items_selects_list: list["SlotItem"] = []

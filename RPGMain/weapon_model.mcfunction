@@ -17,3 +17,4 @@ replaceitem entity @a[tag=sr.player_atk,scores={sr:mh_weapon=18}] slot.hotbar 0 
 replaceitem entity @a[tag=sr.player_atk,scores={sr:mh_weapon=15}] slot.hotbar 0 minecraft:wooden_pickaxe 1 10000 {"item_lock":{ "mode":"lock_in_slot"},"keep_on_death":{}}
 replaceitem entity @a[tag=sr.player_atk,scores={sr:mh_weapon=24}] slot.hotbar 0 minecraft:wooden_shovel 1 10000 {"item_lock":{ "mode":"lock_in_slot"},"keep_on_death":{}}
 replaceitem entity @a[tag=sr.player_atk,scores={sr:mh_weapon=48}] slot.hotbar 0 minecraft:trident 1 10000 {"item_lock":{ "mode":"lock_in_slot"},"keep_on_death":{}}
+replaceitem entity @a[tag=sr.player_atk,scores={sr:mh_weapon=50}] slot.hotbar 0 minecraft:fishing_rod 1 10000 {"item_lock":{ "mode":"lock_in_slot"},"keep_on_death":{}}

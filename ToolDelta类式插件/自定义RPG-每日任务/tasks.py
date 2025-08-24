@@ -25,7 +25,7 @@ class Kill20Monsters(DailyTask):
                     self.data["kill"] = o
 
     def Display(self) -> str:
-        return f"§6{self.data.get('kill', 0)}§7/1 次击杀"
+        return f"§6{self.data.get('kill', 0)}§7/20 次击杀"
 
 
 class RepairObject1Time(DailyTask):

@@ -112,11 +112,11 @@ def RPGQuest(
                         item_to_get = items_to_get[0]
                         if result is None:
                             failed_reasons.append(
-                                f"§6需要 {item_to_get.item.show_name} §c0§f/{count}"
+                                f"§6需要 {item_to_get.disp_name} §c0§f/{count}"
                             )
                         else:
                             failed_reasons.append(
-                                f"§6需要 {item_to_get.item.show_name} §c{result.count}§f/{count}"
+                                f"§6需要 {item_to_get.disp_name} §c{result.count}§f/{count}"
                             )
             if need_plot:
                 player_finished_plot = system.check_plot_record(player).keys()
@@ -341,7 +341,7 @@ class CustomRPGPlotAndTask(Plugin):
 
     def on_def(self):
         self.intract = self.GetPluginAPI("前置-世界交互")
-        self.interper = self.GetPluginAPI("ZBasic")
+        self.interper = self.GetPluginAPI("ZBasic", force=False)
         self.snowmenu = self.GetPluginAPI("雪球菜单v3")
         self.rpg = self.GetPluginAPI("自定义RPG", force=False)
         self.chatbar = self.GetPluginAPI("聊天栏菜单")
@@ -350,7 +350,6 @@ class CustomRPGPlotAndTask(Plugin):
         self.spx = self.GetPluginAPI("自定义RPG-特效")
         cb2bot = self.GetPluginAPI("Cb2Bot通信")
         if TYPE_CHECKING:
-            global Item
             from ..前置_世界交互 import GameInteractive
             from ..前置_聊天栏菜单 import ChatbarMenu
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
@@ -360,7 +359,6 @@ class CustomRPGPlotAndTask(Plugin):
             from ..自定义RPG_教程 import CustomRPGTutorial
             from ..自定义RPG_设置 import CustomRPGSettings
             from ..自定义RPG_特效 import FXStageShow
-            from ..虚拟背包 import Item
 
             self.intract: GameInteractive
             self.interper: ToolDelta_ZBasic
@@ -524,7 +522,7 @@ class CustomRPGPlotAndTask(Plugin):
         res = self.snowmenu.simple_select(player, quests_cb)
         if res is None:
             return False
-        if res > len(quests):
+        if res >= len(quests):
             return False
         section = quests[res]
         self.try_submit_quest(player, section)
@@ -1007,24 +1005,20 @@ class CustomRPGPlotAndTask(Plugin):
         self,
         player: Player,
         shop_name: str,
-        buy_item: str,
-        buy_count: int,
-        sell_item_id: str,
-        sell_count: int,
+        tag: str,
         left: int,
         cdmin: int,
     ):
         path = self.format_shop_cd_path(player)
         f = utils.tempjson.load_and_read(path, default={})
         f.setdefault(shop_name, {})
-        key = f"{buy_item}x{buy_count}->{sell_item_id}x{sell_count}"
-        oldcd, _ = f[shop_name].get(key, (0, 0))
+        oldcd, _ = f.setdefault(shop_name, {}).get(tag, (0, 0))
         cdmin_till_now = int(oldcd - time.time() // 60)
         # BUG
         if cdmin_till_now > 0:
             cdmin = cdmin_till_now
         cdmin_time = int(time.time() // 60 + cdmin)
-        f[shop_name][key] = [left, cdmin_time]
+        f[shop_name][tag] = [left, cdmin_time]
         utils.tempjson.load_and_write(path, f, False)
         utils.tempjson.flush(path)
 
@@ -1032,17 +1026,12 @@ class CustomRPGPlotAndTask(Plugin):
         self,
         player: Player,
         shop_name: str,
-        buy_item: str,
-        buy_count: int,
-        sell_item_id: str,
-        sell_count: int,
-    ):
+        tag: str,
+    ) -> tuple[int, int]:
         f = utils.tempjson.load_and_read(
             self.format_shop_cd_path(player), False, default={}
         )
-        f.setdefault(shop_name, {})
-        key_string = f"{buy_item}x{buy_count}->{sell_item_id}x{sell_count}"
-        lft, cd = f[shop_name].get(key_string, (None, 0))
+        lft, cd = f.setdefault(shop_name, {}).get(tag, (None, 0))
         return lft, max(cd - time.time() // 60, 0)
 
     def set_state(self, player: Player, name: str, state: bool):
@@ -1077,6 +1066,9 @@ class CustomRPGPlotAndTask(Plugin):
         old = self.get_quest_point_datas(player)
         old[quest_linkname] = data
         self.save_quest_point_datas(player, old)
+        
+    def player_in_plot(self, player: Player):
+        return self.running_plots.get(player, None)
 
     # Only can used by bq_loader
     def _regist_plot(self, plot: quest_loader.RegisteredPlot):

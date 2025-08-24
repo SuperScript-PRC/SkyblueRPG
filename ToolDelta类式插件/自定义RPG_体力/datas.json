@@ -1,0 +1,9 @@
+{
+  "author": "ToolDelta",
+  "version": "0.0.1",
+  "plugin-type": "classic",
+  "description": "体力系统",
+  "pre-plugins": {},
+  "plugin-id": "crpg-tili",
+  "enabled": true
+}

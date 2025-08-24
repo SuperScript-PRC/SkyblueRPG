@@ -48,7 +48,7 @@ class PlayerEntity:
         original_crit_pc: float,  # 暴击率
         original_crit_add: float,  # 暴击加成率
         effects: list[RPGEffect] | None = None,  # 携带的效果
-        died_func: Callable[["PlayerEntity"], None] = lambda _: None,  # 死亡回调
+        died_func: Callable[["PlayerEntity", ENTITY | None], None] = lambda killed, killer: None,  # 死亡回调
     ):
         """
         Args:
@@ -273,7 +273,7 @@ class PlayerEntity:
             self.died(killer)
 
     def died(self, killer: "ENTITY"):
-        self.died_func(self)
+        self.died_func(self, killer)
         frame_effects.execute_on_died(self, killer)
         frame_objects.execute_on_died(self, killer)
         if isinstance(killer, PlayerEntity):
@@ -420,6 +420,7 @@ class MobEntity:
         system: "CustomRPG",
         mob_cls: type[frame_mobs.Mob],
         uuid: str,
+        runtime_id: int,
         hp: int,
         effects: list[RPGEffect] | None = None,
         died_func=lambda _: None,
@@ -440,6 +441,7 @@ class MobEntity:
         self.cls = mob_cls
         self.name = mob_cls.show_name
         self.uuid = uuid
+        self.runtime_id = runtime_id
         self.hp = hp
         self.basic_hp_max = mob_cls.max_hp
         self.basic_atks = list(mob_cls.atks)

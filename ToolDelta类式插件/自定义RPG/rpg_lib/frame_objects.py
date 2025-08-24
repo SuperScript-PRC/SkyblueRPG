@@ -29,6 +29,8 @@ class Weapon:
     show_name: str = "<未命名道具>"
     # 描述
     description: str = "无描述"
+    skill_description: str = "无"
+    ult_description: str = "无"
     # 道具星级
     star_level: STARLEVEL = 3
     category: WeaponType = WeaponType.SWORD

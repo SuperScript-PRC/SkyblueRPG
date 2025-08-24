@@ -220,25 +220,28 @@ class CustomRPGUpgrade(Plugin):
     def upgrade_weapon(self, player: Player) -> None:
         rpg = self.rpg
         constants = rpg.constants
+        rpg.player_holder.dump_mainhand_weapon_datas_to_player_basic(
+            rpg.player_holder.get_playerinfo(player)
+        )
         storlist = rpg.backpack_holder.list_player_store_with_filter(
             player, [constants.Category.SWORD, constants.Category.BOW]
         )
         if storlist:
-            section = rpg.menu_gui.check_items(
+            section = rpg.snowmenu_gui.check_items(
                 player, storlist, "§7§l[§6■§7] §r§6请选择待升级的武器\n"
             )
             if section is None:
-                self.rpg.show_fail(player, "选项被取消， 已退出")
+                rpg.show_fail(player, "选项被取消， 已退出")
                 return
         else:
-            self.rpg.show_fail(player, "背包内没有任何可升级的武器..")
+            rpg.show_fail(player, "背包内没有任何可升级的武器..")
             return
         # 选择了需要升级的物品
         item_orig = section
-        item_weapon = self.rpg.ItemWeapon.load_from_item(item_orig)
-        upgrade_cofig = self.rpg.find_weapon_class(item_orig.item.id).upgrade_mode
+        item_weapon = rpg.ItemWeapon.load_from_item(item_orig)
+        upgrade_cofig = rpg.find_weapon_class(item_orig.item.id).upgrade_mode
         if upgrade_cofig is None:
-            self.rpg.show_warn(
+            rpg.show_warn(
                 player,
                 f"§c该物品的组类 ({item_orig.item.categories[0]}) 无对应升级方式， 请告知管理",
             )
@@ -247,7 +250,7 @@ class CustomRPGUpgrade(Plugin):
         materials_select: list["SlotItem"] = []
         update_avaliable_materials = upgrade_cofig.available_upgrade_materials.keys()
         for i in update_avaliable_materials:
-            res = self.rpg.backpack_holder.getItems(player, i)
+            res = rpg.backpack_holder.getItems(player, i)
             if res is not None:
                 materials_select.append(res[0])
         exp_proved = {
@@ -259,21 +262,25 @@ class CustomRPGUpgrade(Plugin):
             upgrade_cofig, item_weapon.level
         )
         if materials_select == []:
-            self.rpg.show_fail(player, "你没有可用于升级此武器的材料")
+            rpg.show_fail(player, "你没有可用于升级此武器的材料")
+            rpg.show_any(player, "6", "推荐材料：")
+            for material, exp in upgrade_cofig.available_upgrade_materials.items():
+                item = rpg.item_holder.getOrigItem(material)
+                rpg.show_any(player, "6", f"  {item.disp_name}")
             return
         if item_weapon.level >= upgrade_cofig.max_level:
-            self.rpg.show_fail(player, "该物品已达到最大等级")
+            rpg.show_fail(player, "该物品已达到最大等级")
             return
         if spec_update_items is None:
-            material = rpg.menu_gui.check_items(
+            material = rpg.snowmenu_gui.check_items(
                 player,
                 materials_select,
                 "§7§l[§6■§7] §r§6选择一份升级材料以用于升级\n",
-                lambda x: f"• {x.item.show_name}§r§7x§f{x.count} §7+§f{exp_proved[x]}§eExp",
+                lambda x: f"• {x.disp_name}§r§7x§f{x.count} §7+§f{exp_proved[x]}§eExp",
             )
             if material is None:
                 if material is None:
-                    self.rpg.show_fail(player, "选项被取消， 已退出")
+                    rpg.show_fail(player, "选项被取消， 已退出")
                     return
             material_count_left = material.count
             # 开始升级
@@ -281,7 +288,7 @@ class CustomRPGUpgrade(Plugin):
                 output_text = ""
                 material_count = 0
                 # 用于展示升级前后的物品
-                item_weapon_upgrade_fake = self.rpg.ItemWeapon.load_from_item(
+                item_weapon_upgrade_fake = rpg.ItemWeapon.load_from_item(
                     item_orig.orig_copy()
                 )
                 while 1:
@@ -321,7 +328,7 @@ class CustomRPGUpgrade(Plugin):
                 item_upgrade_fake = self.weapon_upgrade_once(
                     item_weapon_upgrade_fake, upgrade_cofig
                 )
-                output_text += f"{item_orig.item.show_name}§r §7Lv.§f{self.bigchar.replaceBig(str(item_weapon.level))} §7> §fLv.§e{self.bigchar.replaceBig(str(item_weapon_upgrade_fake.level))}"
+                output_text += f"{item_orig.disp_name}§r §7Lv.§f{self.bigchar.replaceBig(str(item_weapon.level))} §7> §fLv.§e{self.bigchar.replaceBig(str(item_weapon_upgrade_fake.level))}"
                 output_text += self.format_weapon_data_compared(
                     item_weapon, item_weapon_upgrade_fake, upgrade_need_exp_fake
                 )
@@ -348,12 +355,12 @@ class CustomRPGUpgrade(Plugin):
                     rpg.backpack_holder.addPlayerStore(
                         player, item_upgrade_fake.dump_item()
                     )
-                    rpg.show_succ(player, f"{item_orig.item.show_name} §a升级成功")
+                    rpg.show_succ(player, f"{item_orig.disp_name} §a升级成功")
                     self.game_ctrl.sendwocmd(
                         f"/execute as {player.safe_name} run playsound random.levelup @s"
                     )
                     item_name_disp = (
-                        item_upgrade_fake.slotItem.item.show_name + " §a升级完成"
+                        item_upgrade_fake.slotItem.disp_name + " §a升级完成"
                     )
                     for i in range(len(item_name_disp)):
                         if item_name_disp[i] == "§":
@@ -396,18 +403,20 @@ class CustomRPGUpgrade(Plugin):
             enable_to_upgrade = True
             output_text = ""
             for tag_name, count in spec_update_items.items():
-                _player_have = self.rpg.backpack_holder.getItems(player, tag_name)
-                starlevel_text = self.rpg.item_holder.make_item_starlevel(tag_name)
+                _player_have = rpg.backpack_holder.getItems(player, tag_name)
+                starlevel_text = rpg.item_holder.make_item_starlevel(tag_name)
                 if _player_have is None:
                     _player_have = 0
                 else:
                     _player_have = _player_have[0].count
-                need_items[self.rpg.item_holder.getOrigItem(tag_name).show_name] = [
+                need_items[rpg.item_holder.getOrigItem(tag_name).disp_name] = [
                     starlevel_text,
                     count,
                     _player_have,
                 ]
-            output_text += f"{item_weapon.slotItem.item.show_name}§r§7已达到当前最大等级, 需要晋阶材料:"
+            output_text += (
+                f"{item_weapon.slotItem.disp_name}§r§7已达到当前最大等级, 需要晋阶材料:"
+            )
             for itemshowname, (
                 starlevel_text,
                 count_need,
@@ -425,24 +434,24 @@ class CustomRPGUpgrade(Plugin):
                 return
             output_text += "\n§a抬头确认 §f| §c低头退出"
             if self.snowmenu.simple_select_dict(player, {0: output_text}) is None:
-                self.rpg.show_fail(player, "已取消晋阶操作.")
+                rpg.show_fail(player, "已取消晋阶操作.")
                 return
             for tag_name, count in spec_update_items.items():
-                material_item = self.rpg.backpack_holder.getItems(player, tag_name)
+                material_item = rpg.backpack_holder.getItems(player, tag_name)
                 # dangerous: must stackable
                 assert material_item, (
                     f"material {tag_name}->material can't be None or empty"
                 )
-                self.rpg.backpack_holder.removePlayerStore(
+                rpg.backpack_holder.removePlayerStore(
                     player, material_item[0], count
                 )
-            self.rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
+            rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
             item_orig.metadata["Lv"] += 1
-            self.rpg.backpack_holder.addPlayerStore(player, item_orig)
+            rpg.backpack_holder.addPlayerStore(player, item_orig)
             self.game_ctrl.sendwocmd(
                 f"/execute as {player.safe_name} run playsound random.levelup @s"
             )
-            self.rpg.show_succ(player, "物品晋阶成功， 可以继续升级")
+            rpg.show_succ(player, "物品晋阶成功， 可以继续升级")
 
     def upgrade_relic(self, player: Player) -> None:
         rpg = self.rpg
@@ -461,11 +470,11 @@ class CustomRPGUpgrade(Plugin):
             ],
         )
         if storlist:
-            section = rpg.menu_gui.check_items(
+            section = rpg.snowmenu_gui.check_items(
                 player,
                 storlist,
                 "§7§l[§6■§7] §r§6请选择待升级的物品\n",
-                lambda x: "- " + x.item.show_name + f" §r§f<Lv.§e{x.metadata['Lv']}§f>",
+                lambda x: "- " + x.disp_name + f" §r§f<Lv.§e{x.metadata['Lv']}§f>",
             )
             if section is None:
                 self.rpg.show_fail(player, "选项被取消， 已退出")
@@ -504,13 +513,17 @@ class CustomRPGUpgrade(Plugin):
         )
         if materials_select == []:
             rpg.show_fail(player, "你没有可用于升级此饰品的物品")
+            rpg.show_any(player, "6", "推荐材料：")
+            for material, exp in upgrade_cofig.available_upgrade_materials.items():
+                item = self.rpg.item_holder.getOrigItem(material)
+                self.rpg.show_any(player, "6", f"  {item.disp_name}")
             return
         if spec_update_items is None:
-            material = rpg.menu_gui.check_items(
+            material = rpg.snowmenu_gui.check_items(
                 player,
                 materials_select,
                 "§7§l[§6■§7] §r§6选择一份升级材料以用于升级\n",
-                lambda x: f"• {x.item.show_name}§r§7x§f{x.count} §7+§f{exp_proved[x]}§eExp",
+                lambda x: f"• {x.disp_name}§r§7x§f{x.count} §7+§f{exp_proved[x]}§eExp",
             )
             if material is None:
                 if material is None:
@@ -599,7 +612,7 @@ class CustomRPGUpgrade(Plugin):
                     )
                     rpg.show_succ(
                         player,
-                        f"{item_relic_upgrade_fake.slotItem.item.show_name} §r§a升级成功",
+                        f"{item_relic_upgrade_fake.slotItem.disp_name} §r§a升级成功",
                     )
                     player.show(
                         self.format_relic_data_compared(
@@ -613,7 +626,7 @@ class CustomRPGUpgrade(Plugin):
                         f"/execute as {player.safe_name} run playsound random.levelup @s"
                     )
                     item_name_disp = (
-                        item_relic_upgrade_fake.slotItem.item.show_name + " §a升级完成"
+                        item_relic_upgrade_fake.slotItem.disp_name + " §a升级完成"
                     )
                     for i in range(len(item_name_disp)):
                         if item_name_disp[i] == "§":
@@ -671,12 +684,12 @@ class CustomRPGUpgrade(Plugin):
                                 )
                             )
                     while 1:
-                        item_selected = rpg.menu_gui.check_items(
+                        item_selected = rpg.snowmenu_gui.check_items(
                             player,
                             allowed_direct_items,
                             "§7§l[§6■§7] §r§6请选择定向升级材料§f\n",
                             lambda x: (" > " if x.count > 0 else " > §7")
-                            + x.item.show_name
+                            + x.disp_name
                             + f" §e({self.direct_ups[x.item.id].prop})§r"
                             + " §6(你没有该物品)"
                             if x.count
@@ -712,7 +725,7 @@ class CustomRPGUpgrade(Plugin):
                     extra_mateterials = (item_selected.item, _num)
                     rpg.show_succ(
                         player,
-                        f"已选定升级材料 {item_selected.item.show_name}§r§ex{num}§a， 请退出聊天栏",
+                        f"已选定升级材料 {item_selected.disp_name}§r§ex{num}§a， 请退出聊天栏",
                     )
             return
         else:
@@ -726,14 +739,14 @@ class CustomRPGUpgrade(Plugin):
                 else:
                     # TODO: 对于不可堆叠的物品, 这样做会出问题
                     _player_have = _player_have[0].count
-                need_items[self.rpg.item_holder.getOrigItem(tag_name).show_name] = [
+                need_items[self.rpg.item_holder.getOrigItem(tag_name).disp_name] = [
                     starlevel_text,
                     count,
                     _player_have,
                 ]
             self.rpg.show_inf(
                 player,
-                f"{item_relic.slotItem.item.show_name}§r§7已达到当前最大等级, 需要晋阶材料:",
+                f"{item_relic.slotItem.disp_name}§r§7已达到当前最大等级, 需要晋阶材料:",
             )
             for itemshowname, (
                 starlevel_text,

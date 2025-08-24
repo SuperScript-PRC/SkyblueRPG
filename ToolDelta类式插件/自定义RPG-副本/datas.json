@@ -1,0 +1,9 @@
+{
+  "author": "ToolDelta",
+  "version": "0.0.1",
+  "plugin-type": "classic",
+  "description": "自定义RPG-副本",
+  "pre-plugins": {},
+  "plugin-id": "crpg-副本",
+  "enabled": true
+}

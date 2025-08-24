@@ -75,18 +75,21 @@ class CustomRPGRepair(Plugin):
     @utils.thread_func("自定义RPG-修补")
     def player_repair_item(self, playername: str):
         player = self.rpg.getPlayer(playername)
+        self.rpg.player_holder.dump_mainhand_weapon_datas_to_player_basic(
+            self.rpg.player_holder.get_playerinfo(player)
+        )
         with utils.ChatbarLock(playername):
             # is_repairist = self.jobs.has_job(player, "修补匠")
             self.snowmenu.set_player_page(player, None)
             syntax = self.repair_cost_syntax
             actions = self.sight.HeadAction
-            maybe_can_repair_items = self.backpack.load_backpack(
+            maybe_can_be_repaired_items = self.backpack.load_backpack(
                 player
             ).find_item_by_metadata_key("DBL")
-            can_repair_items: list["SlotItem"] = []
+            can_be_repaired_items: list["SlotItem"] = []
             item_max_durability: dict[str, int] = {}
             avali_repair_materials: dict[str, dict[str, int]] = {}
-            for slotitem in maybe_can_repair_items:
+            for slotitem in maybe_can_be_repaired_items:
                 if (
                     self.rpg.item_holder.getItemType(tag_name := slotitem.item.id)
                     == "Weapon"
@@ -98,8 +101,8 @@ class CustomRPGRepair(Plugin):
                         continue
                     avali_repair_materials[tag_name] = wpcls.repair_materials
                     item_max_durability[tag_name] = wpcls.default_durability
-                    can_repair_items.append(slotitem)
-            tlen = len(can_repair_items)
+                    can_be_repaired_items.append(slotitem)
+            tlen = len(can_be_repaired_items)
             if tlen == 0:
                 self.rpg.show_inf(player, "暂无需要修补的物品..")
                 return False
@@ -109,7 +112,7 @@ class CustomRPGRepair(Plugin):
                     format_txt = "§b选择待修补的道具§7>"
                     for i in range(now_index - 3, now_index + 4):
                         if i >= 0 and i < tlen:
-                            slotitem = can_repair_items[i]
+                            slotitem = can_be_repaired_items[i]
                             if i == now_index:
                                 format_txt += "\n§r§e> "
                             else:
@@ -117,7 +120,7 @@ class CustomRPGRepair(Plugin):
                             curr_dur = slotitem.metadata["DBL"]
                             max_dur = item_max_durability[slotitem.item.id]
                             format_txt += (
-                                f"§f{slotitem.item.show_name} "
+                                f"§f{slotitem.disp_name} "
                                 f"§r§7[§fLv.§e{slotitem.metadata['Lv']}§7] "
                                 + self.format_durability_bar(curr_dur, max_dur)
                             )
@@ -132,7 +135,7 @@ class CustomRPGRepair(Plugin):
                             if now_index < tlen - 1:
                                 now_index += 1
                         case actions.SNOWBALL_EXIT:
-                            section = can_repair_items[now_index]
+                            section = can_be_repaired_items[now_index]
                             break
                         case actions.PLAYER_LEFT:
                             return
@@ -151,7 +154,8 @@ class CustomRPGRepair(Plugin):
                 for material in this_repair_materials.keys():
                     self.rpg.show_inf(
                         player,
-                        "  " + self.rpg.item_holder.getOrigItem(material).show_name,
+                        # TODO: directly use Item.disp_name
+                        f"  {self.rpg.item_holder.getOrigItem(material).disp_name}",
                     )
                 return
             materials = list(playerhave_materials.keys())
@@ -215,7 +219,8 @@ class CustomRPGRepair(Plugin):
                                 format_txt += "\n§r§e> "
                             else:
                                 format_txt += "\n§r§7| "
-                            format_txt += f"§f{self.rpg.item_holder.getOrigItem(material).show_name} {self.rpg.item_holder.make_item_starlevel(material)}"
+                            # TODO: directly use Item.disp_name
+                            format_txt += f"§f{self.rpg.item_holder.getOrigItem(material).disp_name} {self.rpg.item_holder.make_item_starlevel(material)}"
                         else:
                             format_txt += "\n§r§7| "
                     fmt_a = self.format_durability_bar(
@@ -231,7 +236,7 @@ class CustomRPGRepair(Plugin):
                     format_txt += (
                         f"\n§r§7修补结果 §r{fmt_a} §7花费： §"
                         + ("f" if money_cost <= playerhave_vault_count else "c")
-                        + f"{money_cost}§7x§f{vault_name.show_name}\n"
+                        + f"{money_cost}§7x§f{vault_name.disp_name}\n"  # TODO: directly use Item.disp_name
                         "§f上下滑动§7切换材料 §f左右滑动§7增减份数， §f扔雪球§7选择"
                     )
                     match e.wait_next_action(format_txt):
@@ -239,7 +244,7 @@ class CustomRPGRepair(Plugin):
                             if now_index > 0:
                                 now_index -= 1
                         case actions.DOWN:
-                            if now_index < tlen - 1:
+                            if now_index < len(materials) - 1:
                                 now_index += 1
                         case actions.LEFT:
                             if material_count > 1:
@@ -250,7 +255,7 @@ class CustomRPGRepair(Plugin):
                             ):
                                 material_count += 1
                         case actions.SNOWBALL_EXIT:
-                            section = can_repair_items[now_index]
+                            section = can_be_repaired_items[now_index]
                             break
                         case actions.PLAYER_LEFT:
                             return False
@@ -263,8 +268,9 @@ class CustomRPGRepair(Plugin):
             new_duration = new_dur
             fmt_txt = (
                 f"§6目前将使用 §f{material_count} §r§6份 "
-                f"§f{self.rpg.item_holder.getOrigItem(material_to_repair).show_name} "
-                f"§r§6来修补 §f{item_need_repaired.item.show_name}\n"
+                # TODO: directly use Item.disp_name
+                f"§f{self.rpg.item_holder.getOrigItem(material_to_repair).disp_name} "
+                f"§r§6来修补 §f{item_need_repaired.disp_name}\n"
             )
             section = self.snowmenu.simple_select_dict(
                 player,
@@ -295,11 +301,13 @@ class CustomRPGRepair(Plugin):
             )
             self.rpg.backpack_holder.clearItem(player, vault, money_cost)
             self.rpg.backpack_holder.removePlayerStore(player, item_need_repaired, 1)
+            item_repaired.uuid = item_need_repaired.uuid  # Avoid strange settings
             self.rpg.backpack_holder.addPlayerStore(player, item_repaired)
+            self.rpg.player_holder.update_property_from_basic_easy(player)
             self.game_ctrl.sendwocmd(
                 f"execute as {player.safe_name} at @s run playsound random.anvil_use"
             )
-            item_name = item_repaired.item.show_name
+            item_name = item_repaired.disp_name
             self.rpg.show_succ(player, f"{item_name} §r§a修复完成")
             player.setActionbar(
                 f"{item_name} §r§7耐久: {self.format_durability_bar(new_duration, max_dur)}",

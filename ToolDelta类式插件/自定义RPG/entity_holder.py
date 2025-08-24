@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from . import CustomRPG
 
 
-
 class EntityHolder:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
@@ -19,6 +18,9 @@ class EntityHolder:
         self.cached_shield: dict[str, int] = {}
         # 主要敌人目标
         self.main_target: dict[str, "ENTITY"] = {}
+
+    def player_in_battle(self, player: Player):
+        return self.main_target.get(player.name)
 
     def activate(self):
         self.rpg_effect_ticking_activate()

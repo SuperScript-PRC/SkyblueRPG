@@ -11,22 +11,31 @@ TRASH_VALUE_AND_WGT: dict[int, dict[str, tuple[float, float]]] = {
         "污浊塑料片": (0.6, 1),
     },
     2: {
-        "废弃空水瓶": (2, 1),
-        "脏手纸": (0.4, 1.6),
-        "废弃泡沫块": (1, 0.7),
-        "污浊塑料片": (0.6, 1),
+        "铜币": (3, 0.6),
+        "损坏的电路板": (3, 0.8),
+        "空玻璃瓶": (3, 0.5)
     },
+    3: {
+        "废旧电线卷": (5, 0.7),
+        "空木盒": (4, 0.8)
+    }
 }
 
 GARBAGE_SPAWN_MIN = 576
 GARBAGE_SPAWN_MAX = 864
 MAX_OPEN_DELAY = 240 * 20
 
+def get_avali_garbages(level: int):
+        res: dict[str, tuple[float, float]] = {}
+        for i in range(1, level + 1):
+            res.update(TRASH_VALUE_AND_WGT[i])
+        return res
+
 
 class Cleaner(Job):
     name = "环卫工"
     level = 1
-    job_levels = (0, 120)
+    job_levels = (0, 120, 260)
 
     def __init__(self, sys: SYSTEM):
         super().__init__(sys)
@@ -63,7 +72,7 @@ class Cleaner(Job):
         garbages: dict[str, int] = {}
         garbage_items: list[str] = []
         garbage_weights: list[float] = []
-        for k, (_, v1) in self.get_avali_garbages(
+        for k, (_, v1) in get_avali_garbages(
             self.calculate_level(self.get_exp(player))
         ).items():
             garbage_items.append(k)
@@ -82,7 +91,7 @@ class Cleaner(Job):
             self.sys.rpg.backpack_holder.giveItems(
                 player, self.sys.rpg.item_holder.createItems(garbage, count)
             )
-        self.add_exp(player, int(garbage_counts / 6))
+        self.add_exp(player, int(garbage_counts / 2))
         self.add_credit(player, garbage_counts / 12)
         self.flush_trash_bin_data(x, y, z)
         # PLOT QUEST SPEC
@@ -92,9 +101,12 @@ class Cleaner(Job):
             self.sys.rpg_quests.finish_quest(player, q)
 
     def submit(self, player: Player):
+        if not self.sys.has_job(player, self.name):
+            self.sys.rpg.show_fail(player, "你没有领取环卫工职业， 请告知管理员")
+            return
         max_val = 0
         submit_items: list[tuple[str, int]] = []
-        for garbage_id, (val, _) in self.get_avali_garbages(
+        for garbage_id, (val, _) in get_avali_garbages(
             self.calculate_level(self.get_exp(player))
         ).items():
             if (
@@ -104,6 +116,7 @@ class Cleaner(Job):
                 submit_items.append((garbage_id, count))
         salary = int(max_val)
         if max_val < 1:
+            # TODO: 折合 1
             self.sys.rpg.show_warn(
                 player, f"总物品价值不足 1 点 ({max_val}/1) §6， 无法回收"
             )
@@ -121,7 +134,8 @@ class Cleaner(Job):
         )
         for garbage, count in garbages:
             self.sys.rpg.show_any(
-                player, "7", f"§7◇ §f{garbage.show_name} §7x §f{count}"
+                # TODO: directly use Item.disp_name
+                player, "7", f"§7◇ §f{garbage.disp_name} §7x §f{count}"
             )
         self.sys.rpg.show_any(player, "7", f"§e收益§7： §f{salary} §b蔚蓝点")
         self.sys.rpg.backpack_holder.giveItems(
@@ -170,9 +184,10 @@ class Cleaner(Job):
         return self.get_trash_bin_datas()[self.format_xyz_key(x, y, z)]
 
     def flush_trash_bin_data(self, x: int, y: int, z: int):
+        cleaners_amount = len(self.all_employees())
         o = self.get_trash_bin_datas()
         o[self.format_xyz_key(x, y, z)] = int_time() + randint(
-            GARBAGE_SPAWN_MIN, GARBAGE_SPAWN_MAX
+            GARBAGE_SPAWN_MIN // cleaners_amount, GARBAGE_SPAWN_MAX // cleaners_amount
         )
         self.set_trash_bin_datas(o)
 
@@ -182,12 +197,6 @@ class Cleaner(Job):
             need_file_exists=False,
             default={},
         )
-
-    def get_avali_garbages(self, level: int):
-        res: dict[str, tuple[float, float]] = {}
-        for i in range(1, level + 1):
-            res.update(TRASH_VALUE_AND_WGT[i])
-        return res
 
     def set_trash_bin_datas(self, obj):
         utils.tempjson.load_and_write(

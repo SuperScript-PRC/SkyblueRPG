@@ -8,6 +8,7 @@ def init_scoreboards():
         ("技能检测", "sr:skillmode"),
         ("怪物血量", "sr:ms_hp"),
         ("怪物种类", "sr:ms_type"),
+        ("怪物系统ID", "sr:ms_rtid"),
     ):
         resp = tooldelta.get_game_control().sendwscmd_with_resp(
             f"/scoreboard objectives add {scb_id} dummy {scb_name}"

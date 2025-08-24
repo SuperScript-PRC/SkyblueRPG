@@ -30,6 +30,7 @@ class CustomRPGDailyTask(Plugin):
         self.ListenPlayerLeave(self.on_player_leave)
         self.ListenActive(self.on_active)
         self.ListenFrameExit(self.on_frame_exit)
+        self.inited = False
 
     def on_def(self):
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
@@ -62,6 +63,7 @@ class CustomRPGDailyTask(Plugin):
         self.cb2bot.regist_message_cb("sr.dailytasks.query", self.on_list_tasks)
         self.print(f"§a加载了 {len(self.tasks)} 个每日任务点")
         self.init_broadcast_listeners()
+        self.inited = True
         # tellraw @a[tag=sr.rpg_bot] {"rawtext":[{"text":"sr.dailytasks.query"},{"selector":"@p"}]}
 
     def on_active(self):
@@ -72,9 +74,14 @@ class CustomRPGDailyTask(Plugin):
         self.online_task_detetors[player] = DailyTasksManager(self, player)
 
     def on_player_leave(self, player: Player):
-        self.online_task_detetors.pop(player).unload()
+        if player in self.online_task_detetors:
+            self.online_task_detetors.pop(player).unload()
+        else:
+            self.print(f"§6玩家 {player.name} 每日任务数据缺失")
 
     def on_frame_exit(self, _):
+        if not self.inited:
+            return
         for player in self.game_ctrl.players:
             self.online_task_detetors[player].unload()
         self.print("已保存每日任务数据")

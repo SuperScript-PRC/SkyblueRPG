@@ -6,12 +6,15 @@ import json
 import importlib
 from types import ModuleType
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 from collections.abc import Callable
 from tooldelta import cfg, fmts, Player
 
+from .define import ShopSell, ShopSellMeta
+
 if TYPE_CHECKING:
     from . import CustomRPGPlotAndTask, BroadcastListenerCB
+    from .plot_utils import Dialogue
 
 
 QUEST_STD = {
@@ -204,6 +207,27 @@ def plot(
     return receiver
 
 
+def dialogue(
+    linked_to: str,
+    npc_name: str,
+    disposable: bool = False,
+    force_play: bool = False,
+):  # -> Callable[..., RegisteredPlot]:
+    _Dialogue = get_system().putils.Dialogue
+
+    def receiver(pfunc: Callable[["Dialogue"], None]):
+        def wrapper(player: Player):
+            pfunc(_Dialogue(player, npc_name))
+
+        wrapper.__name__ = pfunc.__name__
+        p = RegisteredPlot(
+            format_name(now_loading, ""), linked_to, wrapper, disposable, force_play
+        )
+        return p
+
+    return receiver
+
+
 def load_project(basepath: Path):
     global now_loading, now_plotpath
     quest_json_path = basepath / "quests.json"
@@ -284,11 +308,17 @@ class dev_customrpg_plot(ModuleType):
     def __init__(self):
         super().__init__("dev_customrpg_plot")
 
-    CPT = Union["CustomRPGPlotAndTask"]
     plot = staticmethod(plot)
+    dialogue = staticmethod(dialogue)
     plotpath = plotpath
     as_broadcast_listener = staticmethod(as_broadcast_listener)
     get_system = staticmethod(get_system)
+    ShopSell = ShopSell
+    ShopSellMeta = ShopSellMeta
+
+    @property
+    def Dialogue(self):
+        return get_system().putils.Dialogue
 
 
 loader_module = dev_customrpg_plot()

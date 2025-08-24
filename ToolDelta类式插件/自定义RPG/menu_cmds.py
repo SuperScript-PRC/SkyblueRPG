@@ -67,6 +67,13 @@ class MenuCommands:
             self.on_menu_killmob,
             op_only=True,
         )
+        self.menu.add_new_trigger(
+            ["raddexp"],
+            [("玩家名", str, None), ("经验值", int, None)],
+            "向玩家添加经验",
+            self.on_menu_addexp,
+            op_only=True,
+        )
 
     def on_reset_world_spawn(self, player: Player):
         self.sys.game_ctrl.sendwocmd("setworldspawn 586 262 -170")
@@ -175,7 +182,7 @@ class MenuCommands:
     def player_check_panel(self, player: Player):
         playerinf = self.sys.player_holder.get_playerinfo(player)
         playerinf._update()
-        player.show("§7========§f｛§l§e属性详情§r§f｝§7========")
+        player.show("§7=========§f｛§l§e属性详情§r§f｝§7=========")
         player.show(
             "\n".join(PlayerPanel(playerinf).panel(self.sys.cfg["基本属性名称"]))
         )
@@ -192,3 +199,23 @@ class MenuCommands:
                 f"§7 {effect.icon}§f {effect.name}{effect.self_level()}  §7{effect.timeleft_str()}",
             )
         player.show("§7===========================")
+
+    def on_menu_addexp(self, player: Player, args: tuple):
+        target, exp = args
+        try:
+            playerbas = self.sys.player_holder.get_player_basic(
+                self.sys.getPlayer(target)
+            )
+        except Exception:
+            self.sys.show_fail(player, "玩家不存在")
+            return
+        if exp not in range(-100000, 100000):
+            self.sys.show_fail(player, "§c无效的等级和经验")
+            return
+        playerbas.Exp += exp
+        self.sys.rpg_upgrade.add_player_exp(player, 0)
+        self.sys.player_holder.save_game_player_data(player)
+        self.sys.show_inf(
+            player,
+            "更改成功",
+        )

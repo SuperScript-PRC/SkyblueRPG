@@ -17,6 +17,7 @@ TRANSLATOR = {
     "planks": "木板",
     "concrete": "混凝土",
     "stained_hardened_clay": "瓦块",
+    "clay": "粘土块",
 }
 
 VAL = {
@@ -30,6 +31,7 @@ VAL = {
     "brick_block": 4.5,
     "planks": 6.0,
     "concrete": 9.0,
+    "clay": 5.0,
     "stained_hardened_clay": 7.5,
 }
 
@@ -37,17 +39,25 @@ avali_materials = {
     1: [
         ("stone", 0),
         ("granite", 0),
-        ("polished_granite", 0),
         ("diorite", 0),
-        ("polished_diorite", 0),
         ("andesite", 0),
-        ("polished_andesite", 0),
         ("brick_block", 0),
-    ]
+    ],
+    2: [
+        ("polished_granite", 0),
+        ("polished_diorite", 0),
+        ("polished_andesite", 0),
+    ],
+    3: [
+        ("planks", 0),
+        ("planks", 1),
+        ("clay", 0),
+    ],
 }
 
 
 def get_avali_materials(job_level: int):
+    # return tuple[id, data]
     return [
         (k1, v1) for k, v in avali_materials.items() if job_level >= k for k1, v1 in v
     ]
@@ -76,7 +86,7 @@ class CarryMan(Job):
         )
 
     def give_rand_task(self, player: Player):
-        jdatas = self.read_datas(player)
+        jdatas = self.get_datas(player)
         if jdatas.get("task_taken"):
             return None
         job_lv = self.calculate_level(self.get_exp(player))
@@ -118,14 +128,14 @@ class CarryMan(Job):
                 self.sys.game_ctrl.sendwocmd(
                     f"give {player.safe_name} {id} {count} {data}"
                 )
-        self.write_datas(
-            player,
+        jdatas.update(
             {
                 "task_taken": True,
                 "takens": {k: sum(v.values()) for k, v in materials.items()},
                 "salary": 0,
-            },
+            }
         )
+        self.write_datas(player, jdatas)
         return {k: sum(v.values()) for k, v in materials.items()}
 
     def handle_submiter_like(self, pk: dict):
@@ -178,7 +188,7 @@ class CarryMan(Job):
     def submit_tasks(self, player: Player, pos: tuple[int, int, int]):
         x, y, z = pos
         rpg = self.sys.rpg
-        jdatas = self.read_datas(player)
+        jdatas = self.get_datas(player)
         if not jdatas.get("task_taken"):
             rpg.show_inf(player, "你不需要码放任何建材。")
             return
@@ -243,7 +253,11 @@ class CarryMan(Job):
             return
         res = self.give_rand_task(player)
         if res is None:
-            rpg.show_warn(player, "你还没有搬运完上一次获得的材料")
+            rpg.show_warn(player, "你还没有搬运完上一次获得的材料：")
+            need_submits = self.get_datas(player)["takens"]
+            for name, count in need_submits.items():
+                if count > 0:
+                    rpg.show_warn(player, f" - §6{translate(name)}§fx{count}")
         else:
             rpg.show_any(player, "e", "§e你需要将以下材料搬运：")
             for name, count in res.items():
@@ -257,6 +271,8 @@ class CarryMan(Job):
             blockf = structure.get_block((0, y, 0)).foreground
             if blockf is None:
                 block_name = "air"
+            elif blockf.name.endswith("planks"):
+                block_name = "planks"
             else:
                 block_name = blockf.name.removeprefix("minecraft:")
             blocks.setdefault(block_name, 0)

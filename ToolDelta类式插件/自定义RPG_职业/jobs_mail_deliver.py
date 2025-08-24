@@ -17,6 +17,7 @@ SIZE_LARGE = 3
 SIZE_VALUE = {SIZE_NORMAL: 1.0, SIZE_MID: 1.5, SIZE_LARGE: 2.0}
 SIZE_FMT = {SIZE_NORMAL: "a", SIZE_MID: "b", SIZE_LARGE: "d"}
 WEIGHTS = {SIZE_NORMAL: 1, SIZE_MID: 1.4, SIZE_LARGE: 1.7}
+WEIGHT_FOR_LEVEL = (8, 14, 25, 38)
 
 
 def calculate_delay_reduce(delay_seconds: int):
@@ -43,10 +44,14 @@ def format_timer_zhcn(timemin: int):
     return fmt_string
 
 
+def calcuate_max_weight(job_level: int):
+    return WEIGHT_FOR_LEVEL[min(len(WEIGHT_FOR_LEVEL)-1, job_level-1)]
+
+
 class MailDeliver(Job):
     name = "邮递员"
     level = 2
-    job_levels = ()
+    job_levels = (80, 182, 322, 460)
 
     def __init__(self, sys: SYSTEM) -> None:
         super().__init__(sys)
@@ -122,8 +127,8 @@ class MailDeliver(Job):
                     player,
                     f" §{SIZE_FMT[mail.metadata['size']]}✉ §6邮件已超时 {format_timer_zhcn(timeout_pass // 60)}",
                 )
-                self.sys.reduce_credit(player, round(timeout_pass / 300))
-            jdatas = self.read_datas(player)
+                self.reduce_credit(player, round(timeout_pass / 900))
+            jdatas = self.get_datas(player)
             jdatas.setdefault("weight", 0)
             jdatas["weight"] = max(
                 0, jdatas["weight"] - (this_weight := WEIGHTS[mail.metadata["size"]])
@@ -190,10 +195,10 @@ class MailDeliver(Job):
         send_addr: POS,
         recv_addr: POS,
         size: int,
-        deadlock_delay: int,
+        deadline_delay: int,
     ):
         ud = uuid.uuid4().hex
-        deadlock_time = int_time() + deadlock_delay
+        deadlock_time = int_time() + deadline_delay
         mail_item = self.sys.rpg.item_holder.createItems(
             MAIL_ITEMS,
             metadata={
@@ -205,10 +210,10 @@ class MailDeliver(Job):
             },
         )[0]
         self.sys.rpg.backpack_holder.giveItem(player, mail_item)
-        jdatas = self.read_datas(player)
-        jdatas["weight"] += WEIGHTS[size]
+        jdatas = self.get_datas(player)
+        jdatas["weight"] = jdatas.get("weight", 0) + WEIGHTS[size]
         self.write_datas(player, jdatas)
-        self.add_mail_record(player, ud, deadlock_delay)
+        self.add_mail_record(player, ud, deadline_delay)
         self.sys.rpg.show_succ(
             player, f"你接取了一封邮件 （当前负重： {jdatas['weight']:.1f}）"
         )
@@ -218,17 +223,24 @@ class MailDeliver(Job):
         if recv_addr is None:
             self.sys.rpg.show_fail(player, "收件地址太少(0个)， 请反馈给管理员")
             return
-        jdatas = self.read_datas(player)
+        jdatas = self.get_datas(player)
         # TODO: Job Level Related
-        weight = jdatas.setdefault("weight", 0)
-        if weight >= 8:
+        jdatas.setdefault("weight", 0)
+        weight = self.calculate_mail_weight(player)
+        if weight >= calcuate_max_weight(self.get_level(player)):
             self.sys.rpg.show_warn(player, "你接取够多邮件了， 请先送达一些邮件")
             return
-        deadlock_delay = random.randint(86400, 172000)
+        deadline_delay = random.randint(86400, 172000)
         size = random.choices(
             [SIZE_NORMAL, SIZE_MID, SIZE_LARGE], weights=[0.7, 0.2, 0.1]
         )[0]
-        self.handout_single_task(player, send_addr, recv_addr, size, deadlock_delay)
+        self.handout_single_task(player, send_addr, recv_addr, size, deadline_delay)
+
+    def calculate_mail_weight(self, player: Player) -> float:
+        w = 0
+        for m in self.sys.rpg.backpack_holder.getItems(player, "$邮件包裹") or []:
+            w += WEIGHTS[m.metadata["size"]]
+        return w
 
     def add_mail_record(self, gsender: Player, mail_uuid: str, deadlock_time: int):
         path = self.sys.format_data_path("mails.json")
@@ -279,6 +291,9 @@ class MailDeliver(Job):
             self.sys.rpg.show_any("@a", "6", f"§6收件箱被鬼打开了 (在 {x} {y} {z})")
             return
         player = self.sys.rpg.getPlayer(nearestPlayers[0])
+        if not self.has_job(player):
+            self.sys.rpg.show_warn(player, "只有邮递员能打开此收件箱")
+            return
         self.submit(player, (x, y, z))
 
     def place_cb(self, player: Player, _):

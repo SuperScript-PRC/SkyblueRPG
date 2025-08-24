@@ -80,7 +80,11 @@ class PlayerBasic:
         )
         self.system.player_holder.player_entities[s.player] = s
         self.system.player_holder.update_property_from_basic(self, s)
-        s.died_func = lambda _: self.system.player_holder._player_died_handler(s)
+        s.died_func = (
+            lambda player, killer: self.system.player_holder._player_died_handler(
+                player, killer
+            )
+        )
         return s
 
     # 从实体数据更新玩家基本数据

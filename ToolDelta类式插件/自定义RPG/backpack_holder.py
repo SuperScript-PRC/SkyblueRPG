@@ -39,14 +39,14 @@ class BackpackHolder:
         "给予单个物品"
         self.addPlayerStore(player, item)
         if show_to_player:
-            self.sys.show_inf(player, f"§7+ {item.item.show_name} §fx {item.count}")
+            self.sys.show_inf(player, f"§7+ {item.disp_name} §fx {item.count}")
 
     def giveItems(self, player: Player, items: list["SlotItem"], show_to_player=True):
         "给予多个物品"
         for item in items:
             self.addPlayerStore(player, item)
             if show_to_player:
-                self.sys.show_inf(player, f"§7+ {item.item.show_name} §fx {item.count}")
+                self.sys.show_inf(player, f"§7+ {item.disp_name} §fx {item.count}")
 
     # 根据标签名获取玩家背包内物品
     def getItems(self, player: Player, tag_name: str):
@@ -67,7 +67,7 @@ class BackpackHolder:
             item = item[0]
             self.backpack.load_backpack(player).remove_item(tag_name, count)
             if show_to_player:
-                self.sys.show_inf(player, f"§7- {item.item.show_name} §r§fx {count}")
+                self.sys.show_inf(player, f"§7- {item.disp_name} §r§fx {count}")
             if item.count == 1:
                 # 清除特殊槽位
                 need_update = False

@@ -27,7 +27,7 @@ class CustomRPGTree(Plugin):
         self.ListenActive(self.on_inject)
 
     def on_def(self):
-        global PlayerInfo, Structure
+        global PlayerEntity, Structure
         self.rpg = self.GetPluginAPI("自定义RPG")
         self.intr = self.GetPluginAPI("前置-世界交互")
         self.career = self.GetPluginAPI("自定义RPG-职业")
@@ -37,7 +37,7 @@ class CustomRPGTree(Plugin):
             from 前置_世界交互 import GameInteractive, Structure
             from 自定义RPG_职业 import CustomRPGJobs
 
-            PlayerInfo = CustomRPG.PlayerProperties
+            PlayerEntity = CustomRPG.PlayerEntity
             self.rpg: CustomRPG
             self.intr: GameInteractive
             self.career: CustomRPGJobs
@@ -96,7 +96,7 @@ class CustomRPGTree(Plugin):
                         return area, (x, y, z), simplify_name
         return None
 
-    def on_player_use_axe(self, playerinf: "PlayerInfo"):
+    def on_player_use_axe(self, playerinf: "PlayerEntity"):
         player = playerinf.player
         x, y, z = (int(i) for i in player.getPos()[1:])
         res = self.simple_cut_wood(player, x, y, z)
@@ -207,7 +207,7 @@ class CustomRPGTree(Plugin):
         give_woods = int((upper_y - lower_y + 1) * random.randint(15, 25) / 10)
         gen_exps = (upper_y - lower_y + 1) // 2
         self.rpg.show_any(player, "n", "§2砍伐了一棵§a橡树§2， 获得了：")
-        self.rpg.giveItems(player, self.rpg.createItems("木料", give_woods))
+        self.rpg.backpack_holder.giveItems(player, self.rpg.item_holder.createItems("木料", give_woods))
         # self.career.add_career_exp(player, "伐木", gen_exps)
 
     def show_progress_to_player(self, player: Player):
