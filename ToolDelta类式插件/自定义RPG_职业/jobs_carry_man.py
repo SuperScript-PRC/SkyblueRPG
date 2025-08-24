@@ -128,8 +128,11 @@ class CarryMan(Job):
                 self.sys.game_ctrl.sendwocmd(
                     f"give {player.safe_name} {id} {count} {data}"
                 )
+        tota_counts = sum(sum(j for j in i.values()) for i in actua_materials.values())
         jdatas.update(
             {
+                "c": tota_counts,
+                "exp_delta": 0,
                 "task_taken": True,
                 "takens": {k: sum(v.values()) for k, v in materials.items()},
                 "salary": 0,
@@ -193,13 +196,17 @@ class CarryMan(Job):
             rpg.show_inf(player, "你不需要码放任何建材。")
             return
         need_submits = jdatas["takens"].copy()
+        jdatas.setdefault("exp_delta", 0)
         blocks = self.get_blocks(x, y, z)
         bs_num = 0
+        c = jdatas.get("c", 20)
         for block, count in need_submits.copy().items():
             if blocks.get(block, 0) != 0:
+                submit_count = min(count, blocks[block])
                 need_submits[block] = max(0, count - blocks[block])
                 jdatas["salary"] += VAL[block] * min(count, blocks[block])
                 bs_num += 1
+                jdatas["exp_delta"] += submit_count * abs(hash((x, y, z))) % 600 / 100 / c
         jdatas["takens"] = need_submits
         is_ok = sum(need_submits.values()) == 0
         if bs_num == 0:
@@ -238,10 +245,11 @@ class CarryMan(Job):
             assert q, "任务未载入: " + qname
             if q in self.sys.rpg_quests.read_quests(player):
                 self.sys.rpg_quests.finish_quest(player, q)
+            self.add_exp(player, int(1 + jdatas["exp_delta"]))
             jdatas["task_taken"] = False
             jdatas["salary"] = 0
+            jdatas["exp_delta"] = 0
             self.write_datas(player, jdatas)
-            self.add_exp(player, bs_num)
             self.sys.BroadcastEvent(
                 PlayerFinishJobEvent(player, self.name, salary, bs_num).to_broadcast()
             )
