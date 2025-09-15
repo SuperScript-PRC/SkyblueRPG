@@ -47,7 +47,7 @@ class BackpackOpenEnv:
             f"execute as {self.player.safe_name} at @s run tp ~~~ 0 0"
         )
         self.sys.game_ctrl.sendwocmd(
-            f"execute as {self.player.getSelector()} at @s run playsound armor.equip_leather @s"
+            f"execute as {self.player.safe_name} at @s run playsound armor.equip_leather @s"
         )
         return self
 
@@ -63,7 +63,7 @@ class Item:
 
     id: str
     "唯一标识"
-    show_name: str
+    disp_name: str | Callable[["SlotItem"], str]
     "展示名"
     categories: list[str] = field(default_factory=list)
     "所属组类"
@@ -74,6 +74,17 @@ class Item:
     # metadata
     on_use: Callable[["SlotItem", Player], bool] | None = None
     "使用该物品时的回调 (使用者, 玩家名) -> 是否不消耗"
+    on_use_extra: dict[str, Callable[["SlotItem", Player], None]] = field(
+        default_factory=dict
+    )
+
+    def force_disp(self, slotitem: "SlotItem | None" = None):
+        if isinstance(self.disp_name, str):
+            return self.disp_name
+        if slotitem is None:
+            return self.disp_name(SlotItem(self))
+        else:
+            return self.disp_name(slotitem)
 
 
 @dataclass
@@ -104,6 +115,20 @@ class SlotItem:
         return SlotItem(
             item_id_map[id], data["Count"], data["UUID"], data.get("MTData", {})
         )
+
+    @property
+    def disp_name(self):
+        if callable(self.item.disp_name):
+            return self.item.disp_name(self)
+        else:
+            return self.item.disp_name
+
+    def force_disp(self, slotitem: "SlotItem | None" = None):
+        return self.item.force_disp(self)
+
+    @property
+    def id(self):
+        return self.item.id
 
     def __hash__(self):
         return id(self)
@@ -188,17 +213,24 @@ class Backpack:
             count = item.count or 1
             uuid = item.uuid
             item = item.item
-        else:
+        elif isinstance(item, Item):
             uuid = make_uuid()
+        else:
+            raise TypeError(f"Item must be Item or SlotItem, got {type(item).__name__}")
         if item.id not in self._bag.keys():
             self._bag[item.id] = [SlotItem(item, count, uuid, metadata=metadata or {})]
         else:
             if item.stackable and not metadata:
                 self._bag[item.id][0].count += count
             else:
-                for _ in range(count):
+                if count != 1:
+                    for _ in range(count):
+                        self._bag[item.id].append(
+                            SlotItem(item, 1, metadata=metadata or {})
+                        )
+                else:
                     self._bag[item.id].append(
-                        SlotItem(item, 1, metadata=metadata or {})
+                        SlotItem(item, 1, uuid, metadata=metadata or {})
                     )
 
     def remove_item(self, item_id: str, count: int = 1, item_uuid: str = ""):
@@ -249,7 +281,7 @@ class VirtuaBackpack(Plugin):
     Item = Item
     Backpack = Backpack
     SlotItem = SlotItem
-    PAGE_SIZE = 8
+    PAGE_SIZE = 12
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -273,10 +305,10 @@ class VirtuaBackpack(Plugin):
             from 前置_视角菜单 import SightRotation, HeadActionEnv
             from 前置_行为监测 import ActionListener
 
-            snowmenu = self.get_typecheck_plugin_api(SnowMenuV3)
-            self.game_intr = self.get_typecheck_plugin_api(GameInteractive)
-            self.sight = self.get_typecheck_plugin_api(SightRotation)
-            self.act = self.get_typecheck_plugin_api(ActionListener)
+            snowmenu: SnowMenuV3
+            self.game_intr: GameInteractive
+            self.sight: SightRotation
+            self.act: ActionListener
         self.make_data_path()
         snowmenu.register_main_page(
             lambda player: self.skim_bag(player), "背包", priority=2
@@ -359,10 +391,11 @@ class VirtuaBackpack(Plugin):
                     else:
                         fronter = "§r  "
                     format_txt += (
-                        "\n" + fronter + starlevel_color + "┃ " + item.item.show_name
+                        "\n" + fronter + starlevel_color + "┃ " + item.disp_name
                     )
                 for i in range(8 - len(item_page)):
                     format_txt += "\n§r§8  ┃"
+                format_txt += "\n§a\n§a\n§a"
                 item_selected = item_page[pointer]
                 resp = self.sight.wait_next_action(player, proh_repl(format_txt))
                 if resp == HeadAction.PLAYER_LEFT:
@@ -386,14 +419,13 @@ class VirtuaBackpack(Plugin):
         HeadAction = self.sight.HeadAction
 
         def _skim_specified_items(items: list[SlotItem]):
-            checking_item = False
             page = 0
             sel_len = len(items)
             items_pages = utils.split_list(items, self.PAGE_SIZE)
             self.game_ctrl.sendwocmd(
-                f"execute as {player.getSelector()} at @s run tp ~~~ 0 0"
+                f"execute as {player.safe_name} at @s run tp ~~~ 0 0"
             )
-            while 1:
+            while True:
                 if page >= sel_len:
                     page = 0
                 elif page < 0:
@@ -401,51 +433,33 @@ class VirtuaBackpack(Plugin):
                 pointer = page % self.PAGE_SIZE
                 item_page = items_pages[page // self.PAGE_SIZE]
                 item_selected = item_page[pointer]
-                if checking_item:
-                    desc = item_selected.item.description
-                    if not isinstance(desc, str):
-                        desc = desc(item_selected)
-                    desc = desc.replace("[玩家名]", player.name)
-                    if (on_use := item_selected.item.on_use) is not None:
-                        use_str = (
-                            on_use.__doc__ if on_use.__doc__ is not None else "使用"
-                        )
+                format_txt = f"§7------<§f[背包 §6{(page // self.PAGE_SIZE) + 1}§f/§6{len(items_pages)} §f潜行可翻整页]§7>------"
+                for i, item in enumerate(item_page):
+                    starlevel_color = "§7"
+                    if self.crpg:
+                        if item.item.id in self.crpg.item_holder.items_starlevel:
+                            starlevel = self.crpg.item_holder.get_item_starlevel(
+                                item.item.id
+                            )
+                            starlevel_color = ("§7", "§3", "§9", "§d", "§e")[
+                                starlevel - 1
+                            ]
+                    if i == pointer:
+                        fronter = "§e> "
                     else:
-                        use_str = "使用"
-                    format_txt = (
-                        f"{item_selected.item.show_name} §7x {item_selected.count}\n"
-                        "§r§f"
-                        + "-" * 40
-                        + "\n"
-                        + "\n".join(self._cut_long_str(desc))
-                        + "\n§r\n"
-                        f"§6左转返回{f' §f| §a右转{use_str}' if item_selected.item.on_use is not None else ''}\n§a\n§a\n§a"
+                        fronter = "  "
+                    format_txt += (
+                        "\n"
+                        + fronter
+                        + starlevel_color
+                        + "┃ "
+                        + item.disp_name
+                        + f"§r§7 x {item.count}"
                     )
-                else:
-                    format_txt = f"§7------<§f[背包 §6{(page // self.PAGE_SIZE) + 1}§f/§6{len(items_pages)} §f潜行可翻整页]§7>------"
-                    for i, item in enumerate(item_page):
-                        starlevel_color = "§7"
-                        if self.crpg:
-                            if item.item.id in self.crpg.item_holder.items_starlevel:
-                                starlevel = self.crpg.item_holder.get_item_starlevel(item.item.id)
-                                starlevel_color = ("§7", "§3", "§9", "§d", "§e")[
-                                    starlevel - 1
-                                ]
-                        if i == pointer:
-                            fronter = "§e> "
-                        else:
-                            fronter = "  "
-                        format_txt += (
-                            "\n"
-                            + fronter
-                            + starlevel_color
-                            + "┃ "
-                            + item.item.show_name
-                            + f"§r§7 x {item.count}"
-                        )
-                    for i in range(len(item_page), 8):
-                        format_txt += "\n§r§8  ┃"
-                    format_txt += "\n§r§c扔雪球返回 §f| §a右转查看 §f| §b上下滑动切换"
+                for i in range(len(item_page), 8):
+                    format_txt += "\n§r§8  ┃"
+                format_txt += "\n§r§c扔雪球返回 §f| §a右转查看 §f| §b上下滑动切换"
+                format_txt += "\n§a\n§a\n§a"
                 resp = self.sight.wait_next_action(player, proh_repl(format_txt))
                 if resp == HeadAction.PLAYER_LEFT:
                     break
@@ -453,15 +467,15 @@ class VirtuaBackpack(Plugin):
                     case HeadAction.SNOWBALL_EXIT:
                         break
                     case HeadAction.UP:
-                        if self.act.is_shifting(player.name):
+                        if self.act.is_shifting(player):
                             page -= self.PAGE_SIZE
                         else:
                             page -= 1
                         self.game_ctrl.sendwocmd(
-                            f"execute as {player.getSelector()} at @s run playsound dig.sand @s"
+                            f"execute as {player.safe_name} at @s run playsound dig.sand @s"
                         )
                     case HeadAction.DOWN:
-                        if self.act.is_shifting(player.name):
+                        if self.act.is_shifting(player):
                             page += self.PAGE_SIZE
                         else:
                             page += 1
@@ -469,27 +483,82 @@ class VirtuaBackpack(Plugin):
                             f"execute as {player} at @s run playsound dig.stone @s"
                         )
                     case HeadAction.LEFT:
-                        if checking_item:
-                            checking_item = False
-                        else:
-                            return
+                        return
                     case HeadAction.RIGHT:
-                        if not checking_item:
-                            self.game_ctrl.sendwocmd(
-                                f"execute as {player} at @s run playsound note.bit @s ~~~ 1 1.41"
-                            )
-                            checking_item = True
-                        elif item_selected.item.on_use is not None:
-                            resp = item_selected.item.on_use(item_selected, player)
+
+                        def _on_use(slotitem: SlotItem, player: Player):
+                            on_use_func = slotitem.item.on_use
+                            if on_use_func is None:
+                                return
+                            resp = on_use_func(slotitem, player)
                             if not resp:
                                 self.load_backpack(player).remove_item(
                                     item_selected.item.id, 1, item_selected.uuid
                                 )
-                        else:
-                            self.game_ctrl.sendwocmd(
-                                f"execute as {player} at @s run playsound note.bit @s ~~~ 1 0.7"
+
+                        x_section = 0
+                        all_sections: list[
+                            tuple[str, Callable[[SlotItem, Player], None]]
+                        ] = (
+                            [("使用", _on_use)]
+                            if item_selected.item.on_use is not None
+                            else []
+                        )
+                        all_sections.extend(
+                            list(item_selected.item.on_use_extra.items())
+                        )
+                        self.game_ctrl.sendwocmd(
+                            f"execute as {player} at @s run playsound note.bit @s ~~~ 1 1.41"
+                        )
+                        while True:
+                            desc = item_selected.item.description
+                            if not isinstance(desc, str):
+                                desc = desc(item_selected)
+                            desc = desc.replace("[玩家名]", player.name)
+                            section_texts = "§r§f"
+                            for i, (disp_name, _) in enumerate(all_sections):
+                                section_texts += "§8["
+                                if i == x_section:
+                                    section_texts += "§b"
+                                else:
+                                    section_texts += "§7"
+                                section_texts += f"{disp_name}§8]  "
+                            format_txt = (
+                                f"{item_selected.disp_name} §7x {item_selected.count}\n"
+                                "§r§f"
+                                + "一" * 30
+                                + "\n"
+                                + "\n".join(self._cut_long_str(desc))
                             )
-                            checking_item = False
+                            for i in range(8 - len(format_txt.split("\n"))):
+                                format_txt += "\n§r"
+                            format_txt += "\n" + section_texts
+                            if all_sections:
+                                format_txt += "\n§c左划退出 §6右划切换功能 §a扔雪球确认功能\n§a\n§a"
+                            else:
+                                format_txt += "\n§c左划退出\n§a\n§a"
+                            resp = self.sight.wait_next_action(
+                                player, proh_repl(format_txt)
+                            )
+                            match resp:
+                                case HeadAction.PLAYER_LEFT:
+                                    return
+                                case HeadAction.LEFT:
+                                    x_section -= 1
+                                    if x_section < 0:
+                                        break
+                                case HeadAction.RIGHT:
+                                    x_section += 1
+                                    if x_section >= len(all_sections):
+                                        x_section = 0
+                                case HeadAction.SNOWBALL_EXIT:
+                                    if all_sections == []:
+                                        pass
+                                    else:
+                                        all_sections[x_section][1](
+                                            item_selected, player
+                                        )
+
                     case other:
                         fmts.print_war(
                             f"虚拟背包: 玩家 {player} 的菜单响应退出: {other}"
@@ -597,9 +666,6 @@ class VirtuaBackpack(Plugin):
     def on_inject(self):
         self.game_ctrl.sendwocmd("/tag @a remove bagdetect")
         self.save_backpack_timer()
-
-    # def _calc_strlen(self, s: str):
-    #     return sum((not c.isascii()) + 1 for c in s)
 
     def divide_items_by_category(self, items: list["SlotItem"]):
         o: dict[str, list["SlotItem"]] = {}

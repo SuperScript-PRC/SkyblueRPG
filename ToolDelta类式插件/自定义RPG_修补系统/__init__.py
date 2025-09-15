@@ -75,7 +75,7 @@ class CustomRPGRepair(Plugin):
     @utils.thread_func("自定义RPG-修补")
     def player_repair_item(self, playername: str):
         player = self.rpg.getPlayer(playername)
-        self.rpg.player_holder.dump_mainhand_weapon_datas_to_player_basic(
+        self.rpg.player_holder.dump_mainhand_weapon_datas_to_slotitem(
             self.rpg.player_holder.get_playerinfo(player)
         )
         with utils.ChatbarLock(playername):

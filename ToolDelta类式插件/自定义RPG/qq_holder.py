@@ -1,7 +1,4 @@
-import re
 from typing import TYPE_CHECKING
-
-color_replace = re.compile(r"(§[a-z0-9])")
 
 from .rpg_lib.player_basic_data import PlayerBasic
 
@@ -14,15 +11,6 @@ class QQHolder:
         self.sys = sys
         self.api = sys.GetPluginAPI("群服互通", force=False)
         self.enabled = self.api is not None
-        if self.api is not None:
-            self.api.add_trigger(
-                ["list", "玩家列表", "在线玩家", "在线榜"],
-                None,
-                "查询在线玩家榜",
-                self.on_query_datas,
-            )
-        else:
-            sys.print("§群服互通未支持")
 
     def init(self):
         if self.enabled:
@@ -53,15 +41,3 @@ class QQHolder:
                 self.api.sendmsg(self.api.linked_group, msg)
             except Exception as err:
                 self.sys.print(f"§6群消息发送失败: {err}")
-
-    def on_query_datas(self, qqid: int, args: list[str]):
-        outputs = ""
-        for player in self.sys.game_ctrl.players:
-            playerbas = self.sys.player_holder.get_player_basic(player)
-            outputs += f"\n[Lv.{playerbas.Level}] {player.name}"
-            if _ := self.sys.rpg_quests.player_in_plot(player):
-                outputs += " （正在剧情中）"
-            if target := self.sys.entity_holder.player_in_battle(player):
-                dispname = color_replace.sub("", target.name)
-                outputs += f" （正在与 {dispname} 战斗）"
-        self.sendmsg("在线玩家列表：" + outputs)

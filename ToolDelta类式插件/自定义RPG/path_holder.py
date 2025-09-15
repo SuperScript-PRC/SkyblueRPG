@@ -15,3 +15,5 @@ class PathHolder:
     def format_player_basic_path(self, player: Player):
         return self.sys.data_path / "玩家基本数据" / (player.xuid + ".json")
 
+    def format_player_basic_path_by_xuid(self, xuid: str):
+        return self.sys.data_path / "玩家基本数据" / (xuid + ".json")

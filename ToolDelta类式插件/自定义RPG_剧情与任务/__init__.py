@@ -10,7 +10,6 @@ from tooldelta import (
     InternalBroadcast,
     utils,
     cfg as config,
-    fmts,
     game_utils,
     Player,
     TYPE_CHECKING,
@@ -130,18 +129,6 @@ def RPGQuest(
             return False, "\n".join(failed_reasons)
 
     def finish(player: Player, _):
-        for cmd in system.cfg["任务设置"]["任务完成执行的指令"]:
-            system.game_ctrl.sendwocmd(
-                utils.simple_fmt(
-                    {
-                        "[玩家名]": player.name,
-                        "[任务名]": show_name,
-                        "[任务描述]": description,
-                    },
-                    cmd,
-                )
-            )
-        system.play_quest_finished_sound(player)
         for cmd in exec_cmds_when_finished:
             system.game_ctrl.sendwocmd(utils.simple_fmt({"[玩家名]": player.name}, cmd))
         for item_tag, count in items_give_when_finished.items():
@@ -168,6 +155,7 @@ def RPGQuest(
 
 class PlotSkipDetector:
     def __init__(self, sys: "CustomRPGPlotAndTask", player: Player):
+        self.sys = sys
         self.player = player
         self.dic = sys.snowball_blocking_handler
 
@@ -187,7 +175,9 @@ class PlotSkipDetector:
             else:
                 return False
         else:
-            fmts.print_war(f"剧情跳过: 玩家 {self.player.name} 的剧情跳过被意外中断")
+            self.sys.print_war(
+                f"剧情跳过: 玩家 {self.player.name} 的剧情跳过被意外中断"
+            )
             return True
 
 
@@ -377,14 +367,14 @@ class CustomRPGPlotAndTask(Plugin):
     @utils.thread_func("自定义RPG-剧情与任务的游戏初始化")
     def on_inject(self):
         self.chatbar.add_new_trigger(
-            [".plotnpc"],
+            [".plonpc"],
             [],
             "放置NPC剧情触发命令方块(需要创造模式)",
             self.place_npc_plot_cb_at,
             op_only=True,
         )
         self.chatbar.add_new_trigger(
-            [".plotput"],
+            [".ploput"],
             [],
             "放置剧情触发命令方块(需要创造模式)",
             self.place_plot_cb_at,
@@ -447,11 +437,11 @@ class CustomRPGPlotAndTask(Plugin):
         try:
             target, plot_name_linker = args
         except Exception:
-            fmts.print_err(f"错误的剧情脚本调用: {args}")
+            self.print_err(f"错误的剧情脚本调用: {args}")
             return
         player = self.game_ctrl.players.getPlayerByName(target)
         if player is None:
-            fmts.print_war(f"{self.name}: 玩家 {target} 不存在")
+            self.print_war(f"{self.name}: 玩家 {target} 不存在")
         else:
             self._run_plot_by_trigger(player, plot_name_linker)
 
@@ -459,13 +449,13 @@ class CustomRPGPlotAndTask(Plugin):
         try:
             target, quest_name = args[1:3]
         except Exception:
-            fmts.print_err(f"错误的结束任务用: {args}")
+            self.print_err(f"错误的结束任务用: {args}")
             return
         quest = self.get_quest(quest_name)
         if quest is not None:
             self.finish_quest(target, quest)
         else:
-            fmts.print_err(f"在 {target} 上进行了无效任务结束: {quest_name}")
+            self.print_err(f"在 {target} 上进行了无效任务结束: {quest_name}")
 
     def handle_quests_menu(self, player: Player):
         quests = self.read_quests(player)
@@ -673,7 +663,7 @@ class CustomRPGPlotAndTask(Plugin):
                 self.print(f"{player.name} 试图触发一次性剧情 {plot.tagname}, 已取消")
                 return
             elif np := self.running_plots.get(player):
-                fmts.print_war(
+                self.print_war(
                     f"{player.name} 尝试触发剧情 {np} 但是已经在 {plot}",
                     need_log=False,
                 )
@@ -1066,7 +1056,7 @@ class CustomRPGPlotAndTask(Plugin):
         old = self.get_quest_point_datas(player)
         old[quest_linkname] = data
         self.save_quest_point_datas(player, old)
-        
+
     def player_in_plot(self, player: Player):
         return self.running_plots.get(player, None)
 

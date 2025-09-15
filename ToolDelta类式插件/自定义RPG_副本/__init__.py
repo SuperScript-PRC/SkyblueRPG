@@ -3,21 +3,18 @@ import time
 import json
 import math
 from tooldelta import Plugin, Player, plugin_entry, TYPE_CHECKING, utils
-from . import frame_dungeon
-from . import dungeons as _dungeons
+from . import event_apis, frame_dungeon, scripts_loader
 
 importlib.reload(frame_dungeon)
-importlib.reload(_dungeons)
-
-Dungeons = {
-    d.id: d for d in _dungeons.__dict__.values() if isinstance(d, frame_dungeon.Dungeon)
-}
+importlib.reload(scripts_loader)
 
 
 class CustomRPGDungeon(Plugin):
     name = "自定义RPG-副本"
     author = "ToolDelta"
     version = (0, 0, 1)
+
+    event_apis = event_apis
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -34,12 +31,12 @@ class CustomRPGDungeon(Plugin):
         self.rpg = self.GetPluginAPI("自定义RPG")
         self.rpg_mobs = self.GetPluginAPI("自定义RPG-怪物刷新")
         if TYPE_CHECKING:
-            global event_apis
+            global rpg_event_apis
             from 前置_聊天栏菜单 import ChatbarMenu
             from 前置_Cb2Bot通信 import TellrawCb2Bot
             from 前置_世界交互 import GameInteractive
             from 前置_玩家数据存储 import PlayerDataStorer
-            from 自定义RPG import CustomRPG, event_apis
+            from 自定义RPG import CustomRPG, event_apis as rpg_event_apis
             from 自定义RPG_怪物刷新 import CustomRPGMobSpawner
 
             self.chatbar: ChatbarMenu
@@ -56,6 +53,7 @@ class CustomRPGDungeon(Plugin):
             self.manual_put_trig_cb,
             op_only=True,
         )
+        self.dungeons = {d.id: d for d in scripts_loader.load_all(self)}
         self.init_listen_apis()
 
     def on_active(self):
@@ -73,7 +71,7 @@ class CustomRPGDungeon(Plugin):
 
     def manual_put_trig_cb(self, player: Player, _):
         _, x, y, z = player.getPos()
-        for d in Dungeons.values():
+        for d in self.dungeons.values():
             cx, cy, cz = d.entrance_pos
             if math.hypot(x - cx, y - cy, z - cz) < 10:
                 j = {
@@ -104,29 +102,36 @@ class CustomRPGDungeon(Plugin):
         if target is None:
             self.print(f"§6玩家 {target} 不存在")
             return
-        d = Dungeons.get(dungeon_name)
+        d = self.dungeons.get(dungeon_name)
         if d is None:
             self.print(f"§6不支持的副本: {dungeon_name}")
             return
         d.player_enter(self, target)
 
     def on_player_leave(self, player: Player):
-        for d in Dungeons.values():
+        for d in self.dungeons.values():
             d.on_player_leave(player)
 
     def on_frame_exit(self, _):
-        for d in Dungeons.values():
+        for d in self.dungeons.values():
             d.exit()
 
     @utils.timer_event(60, "自定义RPG:副本-计时器")
     def ticking(self):
         ntime = time.time()
-        for d in Dungeons.values():
+        for d in self.dungeons.values():
             d.ticking(ntime)
 
     def on_event(self, evt):
-        for d in Dungeons.values():
+        for d in self.dungeons.values():
             d.on_event(evt.data)
 
+    def query_in_dungeon_players(self):
+        return {
+            d: d.stage.player
+            for d in self.dungeons.values()
+            if d.stage is not None and d.stage.player
+        }
 
-entry = plugin_entry(CustomRPGDungeon)
+
+entry = plugin_entry(CustomRPGDungeon, "自定义RPG-副本")

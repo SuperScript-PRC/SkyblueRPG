@@ -20,10 +20,12 @@ class SrcType(IntEnum):
     NORMAL = 0
     # 来自 buff
     FROM_EFFECT = 1
-    # 来自道具技能
-    FROM_SKILL = 2
     # 来自饰品
-    FROM_RELIC = 3
+    FROM_RELIC = 2
+    # 来自道具技能
+    FROM_SKILL = 3
+    # 来自终结技
+    FROM_ULT = 4
 
 
 # 道具显示在手上的模型
@@ -145,8 +147,10 @@ class AttackType(IntEnum):
     NON_SHIELD = 1
     # 真实攻击 (无视护甲, 减伤效果等)
     REAL = 2
+    # 效果
+    EFFECT = 3
     # 其他类型
-    OTHER = 3
+    OTHER = 4
 
 
 # buff 的类型
@@ -291,3 +295,9 @@ PROPVAL_MAPPING.update(
         )
     )
 )
+
+
+class HurtStatus(IntEnum):
+    NOT_HURTED = 0
+    EFFECT_HURTED = 1
+    BEEN_HURTED = 2

@@ -2,7 +2,7 @@ import time
 from typing import TYPE_CHECKING
 from tooldelta import utils, Player
 from .event_apis import PlayerTradingWithNPCEvent
-from .define import ShopSellMeta, ShopSell
+from .define import ShopSellMeta, ShopSell, RealItemSell
 
 if TYPE_CHECKING:
     from . import CustomRPGPlotAndTask
@@ -249,15 +249,15 @@ def plot_box_print_with_choice(
 def show_buy_and_sell(
     player: Player,
     shop_name: str,
-    *orig_buys_and_sells: ShopSell | ShopSellMeta,
+    *orig_buys_and_sells: ShopSell | ShopSellMeta | RealItemSell,
 ):
     sys = get_system()
     last_page = 0
     page_max = len(orig_buys_and_sells) - 1
-    bought: list[ShopSell | ShopSellMeta] = []
+    bought: list[ShopSell | ShopSellMeta | RealItemSell] = []
     playerinf = sys.rpg.player_holder.get_playerinfo(player)
     new_buys_and_sells = list(orig_buys_and_sells)
-    if eff := playerinf.get_effect("Kindness"):
+    if eff := playerinf.get_effect_by_name("Kindness"):
         level = eff.level
         for i, bs in enumerate(orig_buys_and_sells):
             if bs.cost_item.id == "蔚蓝点":
@@ -271,7 +271,7 @@ def show_buy_and_sell(
                     )
                 new_buys_and_sells[i].cost_count = new_buycount
     while 1:
-        fmt_strings = []
+        fmt_strings: list[str] = []
         for i, bs in enumerate(new_buys_and_sells):
             left, cdmin_time = sys.get_shop_left2cd(player, shop_name, bs.tag)
             if left is None or cdmin_time == 0:
@@ -283,20 +283,17 @@ def show_buy_and_sell(
                 else ""
             )
             old_buycount = orig_buys_and_sells[i].cost_count
-            sellcount = (
-                bs.sell_count if isinstance(bs, ShopSell) else bs.sell_item.count
-            )
             if old_buycount > bs.cost_count:
                 fmt_strings.append(
-                    f"§f{bs.cost_item.disp_name}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§l（折!）§r"
+                    f"§f{bs.cost_item_dispname}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item_dispname}§r§ex{bs.sell_count}§7{left_str} {cd_str} §c§l（折!）§r"
                 )
             elif old_buycount < bs.cost_count:
                 fmt_strings.append(
-                    f"§f{bs.cost_item.disp_name}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str} §c§4（涨!）§r"
+                    f"§f{bs.cost_item_dispname}§r§ex§8{old_buycount}§e§l[{bs.cost_count}]§r §f➭ {bs.sell_item_dispname}§r§ex{bs.sell_count}§7{left_str} {cd_str} §c§4（涨!）§r"
                 )
             else:
                 fmt_strings.append(
-                    f"§f{bs.cost_item.disp_name}§r§ex{bs.cost_count} §f➭ {bs.sell_item.disp_name}§r§ex{sellcount}§7{left_str} {cd_str}"
+                    f"§f{bs.cost_item_dispname}§r§ex{bs.cost_count} §f➭ {bs.sell_item_dispname}§r§ex{bs.sell_count}§7{left_str} {cd_str}"
                 )
 
         def _page_cb(_, page: int):
@@ -337,7 +334,7 @@ def show_buy_and_sell(
         ) < buy_arg.cost_count:
             sys.rpg.show_fail(
                 player,
-                f"需要的物品不足 §6（§f{buy_arg.cost_item.disp_name}§6： §c{player_have}§7/§f{buy_arg.cost_count}§6）",
+                f"需要的物品不足 §6（§f{buy_arg.cost_item.force_disp()}§6： §c{player_have}§7/§f{buy_arg.cost_count}§6）",
             )
             continue
         sys.rpg.backpack_holder.clearItem(
@@ -345,6 +342,10 @@ def show_buy_and_sell(
         )
         if isinstance(buy_arg, ShopSellMeta):
             sys.rpg.backpack_holder.giveItem(player, buy_arg.sell_item.copy())
+        elif isinstance(buy_arg, RealItemSell):
+            sys.game_ctrl.sendwocmd(
+                f"give {player.safe_name} {buy_arg.sell_item_id} {buy_arg.sell_count} {buy_arg.sell_item_data}"
+            )
         else:
             sys.rpg.backpack_holder.giveItems(
                 player,
@@ -420,6 +421,12 @@ def tp(
         )
     if record:
         get_system().save_player_last_plot_position(player, (0, *pos))
+
+
+def dim_tp(player: Player, dim: str, x: int, y: int, z: int):
+    get_system().game_ctrl.sendwocmd(
+        f"execute as {player.safe_name} at @s in {dim} run tp {x} {y} {z}"
+    )
 
 
 def trans(player: Player, fadeIn: int, keep: int, fadeOut: int, color: int):

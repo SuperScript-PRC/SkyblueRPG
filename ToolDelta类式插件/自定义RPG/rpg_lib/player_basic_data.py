@@ -10,14 +10,17 @@ if TYPE_CHECKING:
     from .. import CustomRPG
 
 
-# 玩家的基本属性
-# 仅存储玩家的基本信息 (可直接导入导出到JSON, 玩家实体信息不能)
-# 可以转换为玩家实体信息 (PlayerEntity)
-# 也可以从玩家实体信息转换而来
 @dataclass
 class PlayerBasic:
+    """
+    玩家的基本属性<br>
+    仅存储玩家的基本信息 (可直接导入导出到JSON, 玩家实体信息不能)<br>
+    可以转换为玩家实体信息 (PlayerEntity)<br>
+    也可以从玩家实体信息转换而来<br>
+    """
     system: "CustomRPG"
     player: Player
+    runtime_id: int
     Level: int
     Exp: int
     original_atks: list[int]
@@ -35,6 +38,7 @@ class PlayerBasic:
         return PlayerBasic(
             system,
             player,
+            system.entity_holder.new_runtimeid(),
             Level=data["Lv"],
             Exp=data["Exp"],
             original_atks=data["OrgAtks"],
@@ -63,14 +67,18 @@ class PlayerBasic:
             "MTDatas": self.metadatas,
         }
 
-    # 转换为没有暴击的玩家实体数据类型
-    # 因为玩家实体数据类型不存储暴击值
-    # TODO: 执行这个方法的一些代码会再一次 update_property_from_basic
-    def to_player_entity_with_orig_crit(self):
+    def to_player_entity_with_orig_crit(self, gamemode: int):
+        """
+        转换为没有暴击的玩家实体数据类型
+        因为玩家实体数据类型不存储暴击值
+        TODO: 执行这个方法的一些代码会再一次 update_property_from_basic
+        """
         s = PlayerEntity(
             self.system,
             self.player,
+            self.runtime_id,
             self.HP,
+            gamemode,
             self.HP_max,
             self.original_atks,
             self.original_defs,
@@ -78,7 +86,7 @@ class PlayerBasic:
             0.2,
             self.Effects,
         )
-        self.system.player_holder.player_entities[s.player] = s
+        self.system.player_holder._player_entities[s.player] = s
         self.system.player_holder.update_property_from_basic(self, s)
         s.died_func = (
             lambda player, killer: self.system.player_holder._player_died_handler(
@@ -102,6 +110,7 @@ class PlayerBasic:
         return PlayerBasic(
             system,
             player,
+            system.entity_holder.new_runtimeid(),
             Level=1,
             Exp=0,
             original_atks=[0] * 7,

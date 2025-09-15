@@ -4,7 +4,7 @@ from typing import TypeVar, TYPE_CHECKING
 from tooldelta import cfg, Print
 
 if TYPE_CHECKING:
-    from .rpg_entities import ENTITY
+    from .rpg_entities import ENTITY, PlayerEntity
     from .. import CustomRPG
 
 SYS: "CustomRPG"
@@ -22,6 +22,7 @@ ELEM_TYPE = tuple[int, int, int, int, int, int, int]
 
 def category_join(*args: str):
     return ":".join(args)
+
 
 def real_any(args: list[_LT]) -> _LT | None:
     for arg in args:
@@ -45,8 +46,16 @@ def list_sub(lst1: list[_LT], lst2: list[_LT]) -> list[_LT]:
     return [x - y for x, y in zip(lst1, lst2)]
 
 
-def list_multi(lst: list[_LT], mul: list[_LT]) -> list[_LT]:
+def list_multi(lst: list[float | int], mul: list[float | int]) -> list[float]:
     return [x * y for x, y in zip(lst, mul)]
+
+
+def list_multi_int(lst: list[int], mul: list[int]) -> list[int]:
+    return [x * y for x, y in zip(lst, mul)]
+
+
+def list_multi_to_int(lst: list[int], mul: list[float]) -> list[int]:
+    return [int(x * y) for x, y in zip(lst, mul)]
 
 
 def fill_list_index(lst: list[str], default: list[str]):
@@ -123,18 +132,22 @@ def props_to_list(prop_dic):
 
 
 def make_entity_panel(
-    playerinf: "ENTITY",
+    playerinf: "PlayerEntity",
     otherinf: "ENTITY | None",
     player_crit=False,
 ):
-    playerhp_change = playerinf.hp - (playerhp_last := SYS.entity_holder.get_last_hp(playerinf))
-    if playerhp_change != 0:
+    if playerinf is otherinf:
+        raise ValueError("playerinf and otherinf can't be the same")
+    playerhp_last, is_new = SYS.entity_holder.get_last_hp(playerinf)
+    playerhp_change = playerinf.hp - playerhp_last
+    if playerhp_change != 0:  # or not is_new:
         chgtext1 = f"{['§a+', '§c'][playerhp_change < 0]}{playerhp_change}"
     else:
         chgtext1 = ""
     if otherinf:
-        otherhp_change = otherinf.hp - (otherhp_last := SYS.entity_holder.get_last_hp(otherinf))
-        if otherhp_change != 0:
+        otherhp_last, is_new = SYS.entity_holder.get_last_hp(otherinf)
+        otherhp_change = otherinf.hp - otherhp_last
+        if otherhp_change != 0:  # or not is_new:
             chgtext2 = f"{['§a+', '§c'][otherhp_change < 0]}{otherhp_change}"
         else:
             chgtext2 = ""
@@ -188,6 +201,33 @@ def get_str_display_len(string: str):
             else:
                 length += 1
     return length
+
+
+@staticmethod
+def cut_str_by_len(string: str, length: int):
+    outputs: list[str] = []
+    cache_len = 0
+    cache_str = ""
+    for i in string:
+        c = ord(i)
+        if i == "§":
+            cache_len -= 1
+        elif i.isascii():
+            cache_len += 1
+        else:
+            if c in range(19968, 40960):
+                cache_len += 2
+            else:
+                cache_len += 1
+        if cache_len >= length:
+            outputs.append(cache_str)
+            cache_str = ""
+            cache_len = 0
+        else:
+            cache_str += i
+    if cache_str.strip():
+        outputs.append(cache_str)
+    return outputs
 
 
 def align_left(left_str: str, string: str, length: int) -> str:
@@ -263,11 +303,7 @@ def render_bar_old(
 
 
 def render_bar(
-    current: float,
-    total: float,
-    left_color: str,
-    right_color: str,
-    length: int = 90
+    current: float, total: float, left_color: str, right_color: str, length: int = 90
 ):
     render_blocks = ["", "▍", "▌", "▋", "▊", "▉"]  # "▍", "▌", "▋", "▊", "▉"
     biggest_block_len_max = length // 6
@@ -279,9 +315,7 @@ def render_bar(
     square_rest_count, render_block_rest_index = divmod(prgs_rest, biggest_block_eq)
     output_1 = "ࡇ" * square_count + render_blocks[render_block_index]
     output_rest = "ࡇ" * square_rest_count + render_blocks[render_block_rest_index]
-    final_output = (
-        left_color + output_1 + right_color + output_rest
-    )
+    final_output = left_color + output_1 + right_color + output_rest
     return final_output
 
 

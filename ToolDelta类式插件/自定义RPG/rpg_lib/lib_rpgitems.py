@@ -28,7 +28,7 @@ class ItemWeapon:
             item.metadata.get("KC", 0),
             item.metadata.get("DBL", 200),
             item.metadata.get("Enchs", {}),
-            item.metadata["ATKs"],
+            [0, 0, 0, 0, 0, 0, 0],
             item.metadata["LSU"],
             item.metadata["Chg"],
         )
@@ -40,7 +40,6 @@ class ItemWeapon:
         s.metadata["KC"] = self.killcount
         s.metadata["DBL"] = self.durability
         s.metadata["Enchs"] = self.enchants
-        s.metadata["ATKs"] = self.atks
         s.metadata["LSU"] = self.last_skill_used
         s.metadata["Chg"] = self.charge
         return s
@@ -77,8 +76,13 @@ class ItemRelic:
 def convert_item_to_weapon(item: "SlotItem", owner: "PlayerEntity"):
     "将物品转化为 Weapon 实例"
     from .frame_objects import get_weapon_instance
+    from .. import entry
 
-    return get_weapon_instance(item.item.id, owner, ItemWeapon.load_from_item(item))
+    return get_weapon_instance(
+        item.item.id,
+        owner,
+        entry.rpg_upgrade.update_weapon_by_level(ItemWeapon.load_from_item(item)),
+    )
 
 
 def convert_item_to_relic(item: "SlotItem", owner: "PlayerEntity"):

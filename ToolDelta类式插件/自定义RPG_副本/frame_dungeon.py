@@ -8,9 +8,11 @@ from . import dungeon_utils
 
 importlib.reload(dungeon_utils)
 from .dungeon_utils import SightCtrl, RandChoice, RandChoices, merge
+from . import event_apis
 
 if TYPE_CHECKING:
-    from . import CustomRPGDungeon, event_apis
+    from . import CustomRPGDungeon
+    from . import rpg_event_apis
 
 POWER_ITEM = "蔚源"
 TIMEOUT_SECONDS = 60
@@ -102,16 +104,27 @@ class Dungeon:
                 else f"§4蔚源不足 §c{player_power}§7/{self.power_cost}"
             )
             line = "~" * 30
+            spaces = " " * 6
+            extra_spaces = spaces + "    "
+            sep = "§r\n" + spaces
             return (
                 f"§8✙ {line}| §f异穴挑战§8 |{line} ✙"
-                + f"\n§7[§fLv.{level_str}{self.limited_level}§7] | {self.disp_name} §r§7| {status}"
-                + "\n  §7[§b◆§7] §b增益效果： 无"
-                + f"\n  §7[§et§7] §e挑战限时： {self.max_challenge_time // 60}分钟 {self.max_challenge_time % 60}秒"
-                + "\n  §7[§6!§7] §6可能遭遇：§f\n     "
+                + f"\n      §7[§fLv.{level_str}{self.limited_level}§7] | {self.disp_name} §r§7| {status}"
+                + sep
+                + "§7[§b◆§7] §b增益效果： 无"
+                + sep
+                + f"§7[§et§7] §e挑战限时： {self.max_challenge_time // 60}分钟 {self.max_challenge_time % 60}秒"
+                + sep
+                + "§7[§6!§7] §6可能遭遇：§f\n"
+                + extra_spaces
                 + "§r§f、 ".join(i.show_name for i in mobs)
-                + "\n§r  §7[§d?§7] §d可能获取：§f\n     "
+                + sep
+                + "§7[§d?§7] §d可能获取：§f\n"
+                + extra_spaces
                 + awards_disp
-                + "\n§r  §f选择功能：\n    "
+                + sep
+                + "§f选择功能：\n"
+                + extra_spaces
                 + (
                     "§b❖ 进入异穴  §7|  ❖ 离开"
                     if page == 0
@@ -142,12 +155,18 @@ class Dungeon:
             x, y, z = self.center_pos
             tpx = x + random.randint(-3, 3)
             tpz = z + random.randint(-3, 3)
+            sys.game_ctrl.sendwocmd(
+                f"execute as {player.safe_name} at @s run spawnpoint"
+            )
             sys.game_ctrl.sendwocmd(f"tp {player.safe_name} {tpx} {y} {tpz}")
             sys.game_ctrl.sendwocmd(f"camera {player.safe_name} clear")
             player.setActionbar("§o§7<§c!§7> §r§c准备战斗...")
             time.sleep(3)
             player.setActionbar("§o§7<§c!§7> §r§c挑战开始！")
             self.stage.activate()
+            sys.BroadcastEvent(
+                event_apis.PlayerStartDungeonEvent(player, self).to_broadcast()
+            )
 
     def player_finish(
         self, sys: "CustomRPGDungeon", player: Player, fntype: DungeonFinishType
@@ -156,23 +175,17 @@ class Dungeon:
             player.setActionbar("§c挑战异常")
             return
         sys.game_ctrl.sendwocmd(
-            f"camera {player.safe_name} fade time 0.5 0 0.5 color 0 0 0"
+            f"camera {player.safe_name} fade time 0.5 3 0.5 color 255 255 255"
         )
-        x, y, z = self.exit_pos
-        time.sleep(0.5)
-        sys.game_ctrl.sendwocmd(f"tp @a[name={player.safe_name}] {x} {y} {z}")
+        cost_time = self.stage.since()
         if fntype.win:
             player.setTitle("§a挑战完成！")
             player_power = sys.rpg.backpack_holder.getItemCount(player, POWER_ITEM)
             if player_power < self.power_cost:
                 sys.rpg.show_fail(player, "您的蔚源发生变动， 不足以扣除")
             else:
-                sys.game_ctrl.sendwocmd(
-                    f"execute as {player.safe_name} at @s run playsound portal.travel @s ~~~ 0.5 2"
-                )
-                sys.rpg.show_succ(
-                    player, f"❀ 异穴挑战 {self.disp_name} §r§a挑战成功， 奖励结算："
-                )
+                sys.rpg.show_succ(player, f"❀ {self.disp_name}")
+                sys.rpg.show_succ(player, "异穴挑战成功， 奖励结算：")
                 sys.rpg.backpack_holder.clearItem(
                     player, POWER_ITEM, self.power_cost, False
                 )
@@ -196,8 +209,7 @@ class Dungeon:
                 sys.rpg.show_any(
                     player,
                     "e",
-                    "挑战耗时 "
-                    + time.strftime("%M分 %S秒", time.gmtime(self.stage.since())),
+                    "挑战耗时 " + time.strftime("%M分 %S秒", time.gmtime(cost_time)),
                 )
         elif fntype == DungeonFinishType.FINISH_PLAYEREXIT:
             sys.print(f"§6{self.id}: 玩家 {player.name} 中途退出挑战")
@@ -207,11 +219,24 @@ class Dungeon:
             sys.rpg.show_fail(player, "已超过挑战时间限制， 异穴挑战已退出。")
         else:
             sys.rpg.show_fail(player, "挑战失败..")
-        if not fntype.win:
+        time.sleep(0.5)
+        if fntype.win:
+            sys.game_ctrl.sendwocmd(
+                f"execute as {player.safe_name} at @s run playsound portal.travel @s ~~~ 1 0.5"
+            )
+        else:
             sys.game_ctrl.sendwocmd(
                 f"execute as {player.safe_name} at @s run playsound random.totem @s ~~~ 0.4 2"
             )
+        x, y, z = self.exit_pos
+        time.sleep(0.5)
+        sys.game_ctrl.sendwocmd(f"tp @a[name={player.safe_name}] {x} {y} {z}")
         self.stage = None
+        sys.BroadcastEvent(
+            event_apis.PlayerFinishDungeonEvent(
+                player, self, fntype, cost_time
+            ).to_broadcast()
+        )
 
     def on_player_leave(self, player: Player):
         if self.stage and self.stage.player is player:
@@ -299,7 +324,7 @@ class DungeonStage:
             for mob_runtimeid in self.instage_mobs:
                 mob = self.sys.rpg.mob_holder.get_mob_by_runtimeid(mob_runtimeid)
                 if mob:
-                    mob.died(mob)
+                    mob.died(mob, self.sys.rpg.constants.AttackType.OTHER)
         if fntype is not DungeonFinishType.FRAME_EXIT:
             self.d.player_finish(self.sys, self.player, fntype)
 
@@ -308,7 +333,7 @@ class DungeonStage:
 
     def on_event(
         self,
-        evt: "event_apis.PlayerAttackMobEvent | event_apis.MobAttackPlayerEvent | event_apis.PlayerKillMobEvent | event_apis.MobKillPlayerEvent",
+        evt: "rpg_event_apis.PlayerAttackMobEvent | rpg_event_apis.MobAttackPlayerEvent | rpg_event_apis.PlayerKillMobEvent | rpg_event_apis.MobKillPlayerEvent",
     ):
         a = self.apis
         if (
@@ -319,8 +344,14 @@ class DungeonStage:
         if isinstance(evt, a.PlayerAttackMobEvent | a.MobAttackPlayerEvent):
             self.last_flush_time = time.time()
         elif isinstance(evt, a.PlayerKillMobEvent):
+            evt.cancel_dropexp()
+            evt.cancel_dropitem()
             self.instage_mobs.remove(evt.mob.runtime_id)
-            evt.player.player.setTitle("§a", f"§a\n§a\n§c剩余 {len(self.instage_mobs)}/{self.phase_mobs_amount} 个目标")
+            self.sys.rpg.show_any(
+                evt.player.player,
+                "6",
+                f"§c剩余§e{len(self.instage_mobs)}/{self.phase_mobs_amount}§c个怪物",
+            )
             if not self.instage_mobs:
                 self.finish_current_phase()
         elif isinstance(evt, a.MobKillPlayerEvent):

@@ -5,7 +5,6 @@ from tooldelta import (
     utils,
     TYPE_CHECKING,
     Config,
-    fmts,
     game_utils,
     Player,
     plugin_entry,
@@ -94,7 +93,7 @@ class CustomRPGFishing(Plugin):
                 sx, sy, sz = (float(i) for i in pos1.split(","))
                 ex, ey, ez = (float(i) for i in pos2.split(","))
             except Exception:
-                fmts.print_err(f"鱼池坐标名有误: {k}")
+                self.print_err(f"鱼池坐标名有误: {k}")
                 raise SystemExit
             fishings.append(
                 FishingArea(
@@ -153,7 +152,7 @@ class CustomRPGFishing(Plugin):
             for item_tags in v["物品和权重"].values():
                 for item_tag in item_tags.keys():
                     if not self.rpg.item_holder.item_exists(item_tag):
-                        fmts.print_err(f"自定义RPG-钓鱼系统: 物品不存在: {item_tag}")
+                        self.print_err(f"自定义RPG-钓鱼系统: 物品不存在: {item_tag}")
                         raise SystemExit
 
     @utils.thread_func("自定义RPG-钓鱼上钩")

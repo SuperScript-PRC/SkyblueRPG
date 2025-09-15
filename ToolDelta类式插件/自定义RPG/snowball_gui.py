@@ -8,6 +8,20 @@ if TYPE_CHECKING:
     from . import CustomRPG, SlotItem
 
 
+page_descriptions = tuple(
+    (
+        (string := "\n".join(rpg_utils.cut_str_by_len(i, 46)))
+        + "\n" * (3 - string.count("\n"))
+    )
+    for i in (
+        "查看和配置当前装备的武器， 其中§a第一个槽位§7的武器作为§a主手武器§7。",
+        "查看和配置当前佩戴的饰品， 同类饰品可组合为§a二件套§7或§a四件套§7。",
+        "查看你的角色的各项基本战斗数据。",
+        "",
+    )
+)
+
+
 class SnowmenuGUI:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
@@ -31,12 +45,14 @@ class SnowmenuGUI:
             page_chg[page] = "b"
             p1, p2, p3, p4 = page_chg
             return (
-                "§8======§7===§f===｛|§bTerminal§f|｝===§7===§8======\n"
-                + f"§{p1}➭ 武器配置\n"
-                + f"§{p2}➭ 饰品配置\n"
-                + f"§{p3}➭ 角色数据\n"
-                + f"§{p4}➭ 敬请期待\n"
-                + "§8======§7===§f=================§7===§8======"
+                "§8========§7=====§f=====｛|§bTerminal§f|｝=====§7=====§8========\n"
+                + f"  §{p1}➭ 武器配置\n"
+                + f"  §{p2}➭ 饰品配置\n"
+                + f"  §{p3}➭ 角色数据\n"
+                + f"  §{p4}➭ 敬请期待\n"
+                + "§8一一一一一一一一一一一一一一一一一一一一一一\n§7"
+                + page_descriptions[page]
+                + "§8========§7=====§f=====================§7=====§8========\n§a"
             )
         else:
             return None
@@ -58,9 +74,11 @@ class SnowmenuGUI:
         items: list["SlotItem | None"] = []
         items_hs = {}
         self.game_ctrl.sendwscmd(f"/execute as {player.safe_name} at @s run tp ~~~ ~ 0")
-        self.sys.player_holder.dump_mainhand_weapon_datas_to_player_basic(
+        self.sys.player_holder.dump_mainhand_weapon_datas_to_slotitem(
             self.sys.player_holder.get_playerinfo(player)
         )
+        # 更新主手物品信息到虚拟背包
+        self.sys.player_holder.save_game_player_data(player)
         try:
             for item in (
                 self.sys.backpack_holder.getItem(player, i) if i is not None else i
@@ -548,6 +566,8 @@ class SnowmenuGUI:
     def _player_switch_weapon(self, player: Player):
         playerinf = self.sys.player_holder.get_playerinfo(player)
         playerbas = self.sys.player_holder.get_player_basic(player)
+        self.sys.player_holder.dump_mainhand_weapon_datas_to_slotitem(playerinf)
+        self.sys.player_holder.save_game_player_data(player)
         weapons_uuid = playerbas.mainhand_weapons_uuid
         avali_weapons_count = sum(i is not None for i in weapons_uuid)
         if weapons_uuid[0] is None:
@@ -570,8 +590,9 @@ class SnowmenuGUI:
             assert weapon_item, f"{player.name}的主手物品未找到: {wp_uuid}"
             player.setActionbar(f"§7武器已切换为 {weapon_item.disp_name}")
         else:
+            # will never happen?
             player.setActionbar("§7武器已切换为 §6无")
-        self.sys.display_holder._display_skill_cd_to_player_single(playerinf)
+        self.sys.display_holder.display_skill_cd_to_player(playerinf, force_update=True)
 
     @utils.thread_func("玩家检查面板")
     def _player_check_panel_simple(self, player: Player):

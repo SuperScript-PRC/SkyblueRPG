@@ -1,0 +1,1 @@
+python D:\Super\gitclone\SkyblueRPG\actions\script\auto_pull_plugins.py

@@ -68,6 +68,12 @@ available_settings = [
         ["§c关闭", "§a打开"],
         1,
     ),
+    Setting(
+        "rpg_plot_stereo_sfx",
+        "立体声剧情背景音效",
+        ["§c关闭", "§a打开"],
+        1,
+    ),
     # Setting("sfx", "剧情背景音效", ["§c关闭", "§a打开"], 1),
     # Setting("textfield_size", "剧情文本框尺寸", ["40", "60", "80"], 1),
 ]
@@ -130,16 +136,16 @@ class CustomRPGSettings(Plugin):
                 now_section = sections[now_selected]
                 for index in range(now_selected - 3, now_selected + 4):
                     if index < 0 or index >= len(sections):
-                        output += "\n§8  ┃"
+                        output += "\n§8    ┃"
                     elif now_selected == index:
-                        output += "\n§b- " + sections[index].display_from_settings(
+                        output += "\n§b " + sections[index].display_from_settings(
                             settings
                         )
                     else:
-                        output += "\n  " + sections[index].display_from_settings(
+                        output += "\n    " + sections[index].display_from_settings(
                             settings
                         )
-                output += "\n§b抬头/低头切换 §a左右划动屏幕选择选项 §c扔雪球退出"
+                output += "\n§b抬头/低头选择设置项 §a左右划动屏幕切换设置选项 §c扔雪球退出"
                 resp = e.wait_next_action(output)
                 match resp:
                     case ACTS.LEFT:

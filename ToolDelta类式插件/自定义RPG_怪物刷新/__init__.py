@@ -31,7 +31,6 @@ class CustomRPGMobSpawner(Plugin):
     author = "SuperScript"
     version = (0, 0, 1)
 
-
     def __init__(self, frame):
         super().__init__(frame)
         self.ListenPreload(self.on_def)
@@ -89,13 +88,13 @@ class CustomRPGMobSpawner(Plugin):
         if mob_cls is None:
             player.show("§c无效的标签名")
             return
-        dim, x, y, z = player.getPos()
+        _, x, y, z = player.getPos()
         self.summon(mob_tagname, x, y, z)
         player.show("§a生成生物完成")
 
     def summon(self, mob_tagname: str, x: float, y: float, z: float):
         with PositionLock(int(x), int(y), int(z)):
-            mob_runtimeid = self.rpg.mob_holder.make_runtimeid()
+            mob_runtimeid = self.rpg.entity_holder.new_runtimeid()
             if (mob_cls := self.rpg.mob_holder.get_mob_class(mob_tagname)) is None:
                 raise ValueError(f"无效的怪物标签名: {mob_tagname}")
             if mob_cls.model_id.startswith("mystructure:"):
@@ -107,9 +106,17 @@ class CustomRPGMobSpawner(Plugin):
                     f"summon {mob_cls.model_id} {x} {y} {z}"
                 )
             if res.SuccessCount == 0:
-                raise ValueError(
-                    f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}: {res.OutputMessages[0].Message}"
+                res2 = self.game_ctrl.sendwscmd_with_resp(
+                    f"testforblock {x} {y} {z} air"
                 )
+                if res2.SuccessCount > 0:
+                    raise ValueError(
+                        f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}: {res.OutputMessages[0].Message} (但是世界已加载)"
+                    )
+                else:
+                    raise ValueError(
+                        f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}: {res.OutputMessages[0].Message} (世界未加载)"
+                    )
             self.game_ctrl.sendwocmd(
                 f"scoreboard players set @e[x={x},y={y},z={z},r=1,c=1,tag=!sr.mob,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
             )
@@ -131,7 +138,8 @@ class CustomRPGMobSpawner(Plugin):
 
     @utils.timer_event(60, "更新数据化世界时间")
     def on_timer(self):
-        self._on_timer()
+        if getattr(self.frame.launcher, "serverNumber", None) == 59141823:
+            self._on_timer()
 
     @utils.thread_func("怪物刷新时间检测")
     def _on_timer(self):
@@ -142,7 +150,7 @@ class CustomRPGMobSpawner(Plugin):
             self.game_ctrl.say_to("@a", "§6怪物刷新： 时间更新失败")
 
     def on_place_spawner(self, player: Player, args: tuple):
-        dim, x, y, z = player.getPos()
+        _, x, y, z = player.getPos()
         x, y, z = int(x), int(y), int(z)
         if args[0] == "r":
             if not game_utils.isCmdSuccess(
@@ -257,7 +265,7 @@ class CustomRPGMobSpawner(Plugin):
         self.intr.place_command_block(
             self.intr.make_packet_command_block_update(
                 (x, y - self.iota, z),
-                f"tp @e[y=~{self.iota},r={lmt_range + 5},rm={lmt_range},type={mob_id}] ~~{self.iota}~",
+                f"tp @e[y=~{self.iota},r={lmt_range + 5},rm={lmt_range},type={mob_id},scores={{sr:ms_type={mob_type}}}] ~~{self.iota}~",
                 mode=1,
                 conditional=False,
                 tick_delay=10,
@@ -273,7 +281,7 @@ class CustomRPGMobSpawner(Plugin):
 
     @utils.thread_func("自定义RPG:怪物生成")
     def handler(self, msgs: list[str]):
-        x, y, z, mob_id, mob_type, lmt_num, cd_min = msgs[0].split(", ")
+        x, y, z, _, mob_type, lmt_num, cd_min = msgs[0].split(", ")
         now_exists_num = int(msgs[1])
         x, y, z, lmt_num, cd_min = int(x), int(y), int(z), int(lmt_num), int(cd_min)
         if lmt_num - now_exists_num <= 0:

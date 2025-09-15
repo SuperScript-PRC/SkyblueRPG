@@ -11,13 +11,14 @@ TRASH_VALUE_AND_WGT: dict[int, dict[str, tuple[float, float]]] = {
         "污浊塑料片": (0.6, 1),
     },
     2: {
-        "铜币": (3, 0.6),
-        "损坏的电路板": (3, 0.8),
-        "空玻璃瓶": (3, 0.5)
+        "铜币": (2, 0.6),
+        "损坏的电路板": (1.5, 0.8),
+        "空玻璃瓶": (2.5, 0.3)
     },
     3: {
-        "废旧电线卷": (5, 0.7),
-        "空木盒": (4, 0.8)
+        "废旧电线卷": (3, 0.3),
+        "空木盒": (4, 0.2),
+        "依云矿泉水": (8, 0.1)
     }
 }
 
@@ -35,7 +36,7 @@ def get_avali_garbages(level: int):
 class Cleaner(Job):
     name = "环卫工"
     level = 1
-    job_levels = (0, 120, 260)
+    job_levels = (0, 120, 260, 400)
 
     def __init__(self, sys: SYSTEM):
         super().__init__(sys)

@@ -46,19 +46,20 @@ class CustomRPGJobs(Plugin):
     event_apis = event_apis
 
     LOG = LOG
+    LOG_EXP_ADD = False
+    LOG_CREDIT_ADD = False
 
     def __init__(self, frame):
         super().__init__(frame)
         self.pkt_funcs: dict[int, list] = {}
         self.menu_cbs = {}
         self.inject_funcs = []
-        self.loaded_jobdatas: dict[Player, dict] = {}
+        # self.loaded_jobdatas: dict[Player, dict] = {}
         self.set_logger()
         self.ListenPreload(self.on_def)
         self.ListenActive(self.on_inject)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
-        self.ListenFrameExit(self.on_frame_exit)
         self.ListenPacket([PacketIDS.BlockEvent], self.on_pkts)
 
     def on_def(self):
@@ -90,7 +91,7 @@ class CustomRPGJobs(Plugin):
         self.loaded_job_menus: dict[str, MultiPage] = {}
         self.jobs: dict[str, job_frame.Job] = {job.name: job(self) for job in jobs}
         self.cb2bot.regist_message_cb(r"career.madd", self.on_job_add)
-        self.cb2bot.regist_message_cb(r"career.200", self.force_up_to_200)
+        # self.cb2bot.regist_message_cb(r"career.200", self.force_up_to_200)
 
     def set_logger(self):
         self.logger = logging.Logger("自定义RPG:职业系统")
@@ -103,12 +104,6 @@ class CustomRPGJobs(Plugin):
         self.logger.addHandler(fhdl)
 
     def on_player_join(self, player: Player, reloaded=False):
-        r = utils.tempjson.load_and_read(
-            self.format_data_path("玩家数据", player.xuid + ".json"),
-            need_file_exists=False,
-            default={"curr_jobs": {}, "avali_jobs": [], "credit": 0},
-        )
-        self.loaded_jobdatas[player] = r
         # logger debug
         if LOG and not reloaded:
             jobs = self.get_jobs(player)
@@ -122,19 +117,16 @@ class CustomRPGJobs(Plugin):
             )
 
     def on_player_leave(self, player: Player, reloaded=False):
-        if player in self.loaded_jobdatas.keys():
-            self.save(player)
-            if LOG and not reloaded:
-                jobs = self.get_jobs(player)
-                if jobs == []:
-                    return
-                jobs_data_msgs = ", ".join(
-                    f"name:{i.name} exp:{i.get_exp(player)}" for i in jobs
-                )
-                self.logger.info(
-                    f"{player.name} unloaded with {jobs_data_msgs}, credits={self.get_credit(player)}"
-                )
-            del self.loaded_jobdatas[player]
+        if LOG and not reloaded:
+            jobs = self.get_jobs(player)
+            if jobs == []:
+                return
+            jobs_data_msgs = ", ".join(
+                f"name:{i.name} exp:{i.get_exp(player)}" for i in jobs
+            )
+            self.logger.info(
+                f"{player.name} unloaded with {jobs_data_msgs}, credits={self.get_credit(player)}"
+            )
 
     def on_inject(self):
         def _page_ok(player: Player, page: int):
@@ -184,14 +176,14 @@ class CustomRPGJobs(Plugin):
                 if credit < 60
                 else "§a非常好"
             )
-            outputs += f"\n§a信誉分： §f{credit:.1f} §f{credit_lv}§f）\n§a抬头选择 §7| §c低头退出"
+            outputs += f"\n§a信誉分： §f{credit:.1f} §f（{credit_lv}§f）\n§a抬头选择 §7| §c低头退出"
             return outputs
 
         mainpage = self.snowmenu.MultiPage(
             "sr.job", _page_cb, _page_ok, parent_page_id="default"
         )
         self.chatbar.add_new_trigger(
-            ["job"], ..., "开发者设置职业参数", self.handle_menu
+            ["job"], ..., "开发者设置职业参数", self.handle_menu, op_only=True
         )
         self.add_menu_cb("addexp", self.on_force_add_job_exp)
         for player in self.frame.get_players().getAllPlayers():
@@ -201,18 +193,6 @@ class CustomRPGJobs(Plugin):
         self.add_menu_cb("set", self.op_set_job)
         self.snowmenu.register_main_page(mainpage, "职业面板")
         self.snowmenu.add_page(mainpage)
-        self.on_timer_save()
-
-    @utils.timer_event(480, "保存职业数据")
-    def on_timer_save(self):
-        for player in self.loaded_jobdatas.keys():
-            if not player.online:
-                self.print(f"§cPlayer not online but save data: {player.name}")
-            self.save(player)
-
-    def on_frame_exit(self, _):
-        for player in self.loaded_jobdatas.copy().keys():
-            self.on_player_leave(player, reloaded=True)
 
     def on_force_add_job_exp(self, player: Player, args):
         args = list(args)
@@ -278,18 +258,23 @@ class CustomRPGJobs(Plugin):
         if job_name not in (job.name for job in jobs):
             self.rpg.show_fail(player, "无效职业名")
             return
-        self.loaded_jobdatas[player]["curr_jobs"][job_name] = self.init_job_data(
-            job_name
-        )
+        o = self.read_datas(player)
+        o["curr_jobs"][job_name] = self.init_job_data(job_name)
+        self.write_datas(player, o)
         self.rpg.show_any(player, "d", f"设置职业： §e{job_name}")
 
     def player_change_job(self, player: Player):
-        jobdata = self.loaded_jobdatas[player]
+        jobdata = self.read_datas(player)
 
         def _show_cb(_, page: int): ...
 
-    def get_credit(self, player: Player) -> int:
-        return self.loaded_jobdatas[player].get("credit", 0)
+    def get_credit(self, player: Player) -> float:
+        return self.read_datas(player).get("credit", 0)
+
+    def set_credit(self, player: Player, credit: float):
+        o = self.read_datas(player)
+        o["credit"] = credit
+        self.write_datas(player, o)
 
     def add_inject_func(self, func):
         self.inject_funcs.append(func)
@@ -301,9 +286,9 @@ class CustomRPGJobs(Plugin):
         if len(self.get_jobs(player)) >= 2 and not player.is_op():
             self.rpg.show_fail(player, "职业数量过多")
             return
-        self.loaded_jobdatas[player]["curr_jobs"][job_name] = self.init_job_data(
-            job_name
-        )
+        o = self.read_datas(player)
+        o["curr_jobs"][job_name] = self.init_job_data(job_name)
+        self.write_datas(player, o)
         if showto:
             self.rpg.show_any(player, "d", f"获得新职业： §e{job_name}")
 
@@ -312,14 +297,6 @@ class CustomRPGJobs(Plugin):
 
     def get_job_employees(self, job_name: str):
         return [i for i in self.game_ctrl.players if self.has_job(i, job_name)]
-
-    def save(self, player: Player):
-        utils.tempjson.load_and_write(
-            path := self.format_data_path("玩家数据", player.xuid + ".json"),
-            self.loaded_jobdatas[player],
-            need_file_exists=False,
-        )
-        utils.tempjson.flush(path)
 
     def init_job_data(self, job_name: str):
         return {"exp": 0, "metadata": {}, "skills": 0}
@@ -331,7 +308,7 @@ class CustomRPGJobs(Plugin):
         raise ValueError(f"职业不存在: {job_name}")
 
     def get_jobs_datas(self, player: Player):
-        return self.loaded_jobdatas[player]["curr_jobs"]
+        return self.read_datas(player)["curr_jobs"]
 
     def get_job_datas(self, player: Player, job_name: str):
         # print(player.name, "GetJobDatas", self.get_jobs_datas(player)[job_name])
@@ -339,19 +316,35 @@ class CustomRPGJobs(Plugin):
 
     def write_job_datas(self, player: Player, job_name: str, job_datas: dict):
         # print(player.name, "SetJobDatas", job_datas)
-        self.loaded_jobdatas[player]["curr_jobs"][job_name] = job_datas
+        o = self.read_datas(player)
+        o["curr_jobs"][job_name] = job_datas
+        self.write_datas(player, o)
 
     def get_jobs(self, player: Player):
         jobs_name = self.get_jobs_datas(player).keys()
         return [self.jobs[name] for name in jobs_name]
 
-    def force_up_to_200(self, args):
-        target = args[0]
-        player = self.game_ctrl.players.getPlayerByName(target)
-        if player is None:
-            return
-        for job in self.get_jobs(player):
-            job.add_exp(player, max(0, 200 - job.get_exp(player)))
+    # def force_up_to_200(self, args):
+    #     target = args[0]
+    #     player = self.game_ctrl.players.getPlayerByName(target)
+    #     if player is None:
+    #         return
+    #     for job in self.get_jobs(player):
+    #         job.add_exp(player, max(0, 200 - job.get_exp(player)))
+
+    def read_datas(self, player: Player) -> dict:
+        return utils.tempjson.load_and_read(
+            self.format_data_path("玩家数据", player.xuid + ".json"),
+            need_file_exists=False,
+            default={"curr_jobs": {}, "avali_jobs": [], "credit": 0},
+        )
+
+    def write_datas(self, player: Player, job_datas: dict):
+        utils.tempjson.load_and_write(
+            self.format_data_path("玩家数据", player.xuid + ".json"),
+            job_datas,
+            need_file_exists=False,
+        )
 
 
 entry = plugin_entry(CustomRPGJobs, "自定义RPG-职业")

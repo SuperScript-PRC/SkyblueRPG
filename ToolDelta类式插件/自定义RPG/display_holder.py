@@ -12,7 +12,7 @@ class DisplayHolder:
         self.sys = sys
 
     def activate(self):
-        self._display_skill_cd_to_player()
+        self._display_skill_cd_to_player_thread()
 
     # 给予物品提示
     def display_items_added(self, player: Player, items: list["SlotItem"]):
@@ -64,6 +64,27 @@ class DisplayHolder:
             playerinf, playerinf.weapon.chg
         )
 
+    def display_skill_cd_to_player(self, playerinf: PlayerEntity, force_update=False):
+        if weapon := playerinf.weapon:
+            weapon_cd = self.sys.item_holder.get_weapon_skill_cd(weapon)
+            if weapon_cd > 1:
+                prog = weapon_cd / weapon.cd_skill
+                self.display_progress_by_durability_bar(
+                    playerinf.player,
+                    "slot.hotbar 1",
+                    "iron_helmet",
+                    1,
+                    165,
+                    prog,
+                )
+            elif weapon_cd == 1 or (force_update and weapon_cd == 0):
+                # 刚刚好准备退出cd模式
+                self.sys.tutor.check_point("自定义RPG:技能冷却完成", playerinf.player)
+                self.sys.game_ctrl.sendwocmd(
+                    f"/replaceitem entity {playerinf.player.safe_name} slot.hotbar 1 iron_ingot 1 755 "
+                    + r'{"item_lock":{"mode":"lock_in_slot"}}'
+                )
+
     # 物品栏进度条
     def display_progress_by_durability_bar(
         self,
@@ -81,27 +102,14 @@ class DisplayHolder:
         )
 
     @utils.timer_event(1, "数据化显示武器CD值")
-    def _display_skill_cd_to_player(self):
-        for playerinf in self.sys.player_holder.player_entities.values():
-            self._display_skill_cd_to_player_single(playerinf)
+    def _display_skill_cd_to_player_thread(self):
+        for playerinf in self.sys.player_holder._player_entities.values():
+            self.display_skill_cd_to_player(playerinf)
 
-    def _display_skill_cd_to_player_single(self, playerinf: PlayerEntity):
-        if weapon := playerinf.weapon:
-            weapon_cd = self.sys.item_holder.get_weapon_skill_cd(weapon)
-            if weapon_cd > 1:
-                prog = weapon_cd / weapon.cd_skill
-                self.display_progress_by_durability_bar(
-                    playerinf.player,
-                    "slot.hotbar 1",
-                    "iron_helmet",
-                    1,
-                    165,
-                    prog,
-                )
-            elif weapon_cd == 1:
-                # 刚刚好准备退出cd模式
-                self.sys.tutor.check_point("自定义RPG:技能冷却完成", playerinf.player)
-                self.sys.game_ctrl.sendwocmd(
-                    f"/replaceitem entity {playerinf.player.safe_name} slot.hotbar 1 iron_ingot 1 755 "
-                    + r'{"item_lock":{"mode":"lock_in_slot"}}'
-                )
+    def clear_player_skill_and_ult_setter(self, player: Player):
+        self.sys.game_ctrl.sendwocmd(
+            f"replaceitem entity {player.safe_name} slot.hotbar 1 air"
+        )
+        self.sys.game_ctrl.sendwocmd(
+            f"replaceitem entity {player.safe_name} slot.hotbar 2 air"
+        )

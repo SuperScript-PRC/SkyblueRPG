@@ -6,9 +6,28 @@ if TYPE_CHECKING:
     from .rpg_entities import MobEntity, ENTITY
 
 ELEMENTS = tuple[int, int, int, int, int, int, int]
+"""
+蔚蓝空域中, 设定这些元素名称依次为:
+- 火属性
+- 冰属性
+- 草属性
+- 雷属性
+- 金属性
+- 虚空属性
+- 末影属性
+"""
 
 
 class Mob:
+    """
+    - 火属性
+    - 冰属性
+    - 草属性
+    - 雷属性
+    - 金属性
+    - 虚空属性
+    - 末影属性
+    """
     model_id: str
     tag_name: str
     type_id: int
@@ -21,6 +40,7 @@ class Mob:
     drop_exp_range: tuple[int, int]
     loots: tuple[tuple[str, int, float], ...]
     harmful: bool | None = None
+    tags: tuple[str, ...] = ()
 
     @classmethod
     def init(cls, entity: "MobEntity"):
@@ -39,11 +59,7 @@ class Mob:
     # 返回: 是否拦截此次伤害
     @classmethod
     def injured(
-        cls,
-        entity: "MobEntity",
-        fromwho: "ENTITY",
-        damages: list[int],
-        is_crit: bool
+        cls, entity: "MobEntity", fromwho: "ENTITY", damages: list[int], is_crit: bool
     ) -> bool:
         return False
 

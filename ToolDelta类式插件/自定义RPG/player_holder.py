@@ -1,6 +1,7 @@
+from time import time
 from typing import TYPE_CHECKING
-
-from tooldelta import Player, fmts
+from weakref import WeakKeyDictionary
+from tooldelta import Player
 from tooldelta.utils import tempjson
 from . import event_apis
 from .rpg_lib import constants, utils as rpg_utils
@@ -22,21 +23,52 @@ class PlayerHolder:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
         # 玩家实体缓存数据
-        self.player_entities: dict[Player, PlayerEntity] = {}
+        self._player_entities: dict[Player, PlayerEntity] = {}
         self.loaded_player_basic_data: dict[Player, PlayerBasic] = {}
         # 玩家上一次的武器冷却
         self.player_last_weapon_cd: dict[Player, float] = {}
         # 玩家上一次的武器终结技充能
         self.player_last_weapon_chg: dict[Player, int] = {}
+        self.player_last_display_effect: WeakKeyDictionary[PlayerEntity, int] = (
+            WeakKeyDictionary()
+        )
         self.sys.rpg_settings.add_setting_changed_listener(
             "pvp", self._on_change_pvp_mode
         )
         self.initialized = False
 
+        if False:
+            from .ref_saver import save_ref, read_ref
+
+            def check_ref(_):
+                import sys
+
+                for k, v in self._player_entities.items():
+                    self.sys.print(f"ref of {k.name} is {sys.getrefcount(v)}")
+
+            def set_ref(_):
+                save_ref(list(self._player_entities.values()))
+                self.sys.print("ref saved")
+
+            def get_ref(_):
+                refs = read_ref()
+                for rname, rcount in refs:
+                    self.sys.print(f"ref of {rname} is {rcount}")
+
+            self.sys.frame.add_console_cmd_trigger(
+                ["gref"], None, self.sys.name, check_ref
+            )
+            self.sys.frame.add_console_cmd_trigger(
+                ["ssr"], None, self.sys.name, set_ref
+            )
+            self.sys.frame.add_console_cmd_trigger(
+                ["ggr"], None, self.sys.name, get_ref
+            )
+
     def activate(self):
         self.initialized = True
 
-    def add_player(self, player: Player, init=False):
+    def add_player(self, player: Player, init=False, is_creative=False):
         path = self.sys.path_holder.format_player_basic_path(player)
         data = tempjson.load_and_read(path, need_file_exists=False, default=None)
         if data is None:
@@ -45,28 +77,36 @@ class PlayerHolder:
         basic_data = PlayerBasic.read_from_data_without_effects(self.sys, player, data)
         # 加载基础数据
         self.loaded_player_basic_data[player] = basic_data
-        self.player_entities[player] = (
-            entity := basic_data.to_player_entity_with_orig_crit()
+        entity = basic_data.to_player_entity_with_orig_crit(
+            gamemode=1 if is_creative else 2
         )
+        # self._player_entities[player] = (
+        #     entity := basic_data.to_player_entity_with_orig_crit()
+        # )
         self._init_player_effects(basic_data, entity, data["Effs"])
         entity.switch_pvp(bool(self.sys.rpg_settings.get_player_setting(player, "pvp")))
+        self.sys.game_ctrl.sendwocmd(
+            f"scoreboard players set {player.safe_name} sr:ms_rtid {basic_data.runtime_id}"
+        )
+        self.sys.entity_holder.load_player(entity)
         if init:
             self.sys.qq_holder.on_player_join(basic_data)
         return entity
 
     # 玩家退出处理
     def remove_player(self, player: Player, normal=False):
-        if player not in self.player_entities:
-            fmts.print_war(
+        if (playerinf := self._player_entities.get(player)) is None:
+            self.sys.print_war(
                 f"玩家移除: 玩家 {player.name} 没有被加载到 RPG 系统, 忽略移除"
             )
             return
         if normal:
             self.sys.qq_holder.on_player_leave(self.get_player_basic(player))
+        playerinf.set_removed()
         self.save_game_player_data(player, unload_path=True)
         self.sys.entity_holder.unload_player(player)
-        if player in self.player_entities:
-            del self.player_entities[player]
+        if player in self._player_entities.keys():
+            del self._player_entities[player]
         if player in self.loaded_player_basic_data:
             del self.loaded_player_basic_data[player]
         if player in self.player_last_weapon_cd:
@@ -75,7 +115,7 @@ class PlayerHolder:
             del self.player_last_weapon_chg[player]
 
     def get_playerinfo(self, player: Player):
-        return self.player_entities[player]
+        return self._player_entities[player]
 
     def get_player_basic(self, player: Player):
         return self.loaded_player_basic_data[player]
@@ -113,7 +153,7 @@ class PlayerHolder:
             weapon := self.sys.backpack_holder.getItem(basic.player, weapon_uuid)
         ):
             basic.mainhand_weapons_uuid[0] = None
-            fmts.print_war(
+            self.sys.print_war(
                 f"玩家 {basic.player.name} 所持主手物品 UUID 无法对应背包物品 UUID"
             )
         else:
@@ -127,7 +167,7 @@ class PlayerHolder:
             elif not (
                 relic := self.sys.backpack_holder.getItem(basic.player, relic_uuid)
             ):
-                fmts.print_war(
+                self.sys.print_war(
                     f"玩家 {basic.player} 所持饰品UUID无法对应背包物品UUID: {relic_uuid}"
                 )
                 basic.relics_uuid[basic.relics_uuid.index(relic_uuid)] = None
@@ -148,12 +188,14 @@ class PlayerHolder:
             path = self.sys.path_holder.format_player_basic_path(player)
             playerinf = self.get_playerinfo(player)
             self.get_player_basic(player).update_from_player_property(playerinf)
-            self.dump_mainhand_weapon_datas_to_player_basic(playerinf)
+            self.dump_mainhand_weapon_datas_to_slotitem(playerinf)
             tempjson.load_and_write(path, self.get_player_basic(player).dump())
             if unload_path:
                 tempjson.unload_to_path(path)
         else:
-            fmts.print_war(f"save_game_player_data: 玩家 {player.name} 没有被加载到 RPG 系统")
+            self.sys.print_war(
+                f"save_game_player_data: 玩家 {player.name} 没有被加载到 RPG 系统"
+            )
 
     def get_player_last_weapon_charge(self, player: PlayerEntity):
         return self.player_last_weapon_chg.get(player.player)
@@ -161,14 +203,14 @@ class PlayerHolder:
     def set_player_last_weapon_charge(self, player: PlayerEntity, charge: int):
         self.player_last_weapon_chg[player.player] = charge
 
-    def dump_mainhand_weapon_datas_to_player_basic(self, playerinf: PlayerEntity):
+    def dump_mainhand_weapon_datas_to_slotitem(self, playerinf: PlayerEntity):
         "将武器数据格式化为可保存内容"
         if (weapon := playerinf.weapon) is None:
             return
         player_basic = self.get_player_basic(playerinf.player)
         mainhand_weapon_uuid = player_basic.mainhand_weapons_uuid[0]
         if mainhand_weapon_uuid is None:
-            fmts.print_war(
+            self.sys.print_war(
                 f"异常: 玩家主手有道具, 实际上基础信息内没有 ({player_basic.mainhand_weapons_uuid})"
             )
             return
@@ -176,7 +218,7 @@ class PlayerHolder:
             playerinf.player, mainhand_weapon_uuid
         )
         if mainhand_weapon_slot is None:
-            fmts.print_war(
+            self.sys.print_war(
                 f"异常: 玩家主手有道具(uuid={mainhand_weapon_uuid}), 实际上背包内没有"
             )
             return
@@ -225,7 +267,7 @@ class PlayerHolder:
         effect_anti = 0.0
         weapon_mainhand_model = 0
         if weapon := playerinf.weapon:
-            atks = rpg_utils.list_add(atks, list(weapon.common_atks))
+            atks = rpg_utils.list_add(atks, list(weapon.current_atks))
             weapon_mainhand_model = weapon.show_model
         # 饰品数值
         for relic in playerinf.relics:
@@ -266,7 +308,6 @@ class PlayerHolder:
             effect_hit,
             effect_anti,
         )
-        self.player_entities[player] = playerinf
         self.sys.game_ctrl.sendwocmd(
             f"/scoreboard players set {player.safe_name} sr:mh_weapon {weapon_mainhand_model}"
         )
@@ -302,4 +343,13 @@ class PlayerHolder:
         self.get_playerinfo(player).switch_pvp(bool(mode))
 
     def player_online(self, player: Player):
-        return player in self.player_entities.keys()
+        return player in self._player_entities.keys()
+
+    def update_last_display_effect_time(self, playerinf: PlayerEntity):
+        self.player_last_display_effect[playerinf] = int(time())
+
+    def displayed_effect_last(self, playerinf: PlayerEntity):
+        return time() - self.player_last_display_effect.get(playerinf, 0) < 0.5
+
+    def player_change_gamemode(self, player: Player, mode: int):
+        self.get_playerinfo(player).gamemode = mode

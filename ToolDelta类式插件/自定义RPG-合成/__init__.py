@@ -110,7 +110,9 @@ class CustomRPGCrafting(Plugin):
         self.print(
             f"加载了 {len(self.recipes)} 个组类的 {sum(len(i) for i in self.recipes.values())} 个配方"
         )
-        self.snowmenu.register_main_page(lambda p: self.on_craft(p) and False, "我的合成", priority=-100)
+        self.snowmenu.register_main_page(
+            lambda p: self.on_craft(p) and False, "我的合成", priority=-100
+        )
 
     @utils.thread_func("自定义RPG:合成")
     def on_craft(self, player: Player) -> bool:
@@ -166,7 +168,7 @@ class CustomRPGCrafting(Plugin):
                         return True
                     case action.SNOWBALL_EXIT:
                         section1 = m1[y1][x1]
-                        if section1 == "退出" or self.behavior.is_shifting(player.name):
+                        if section1 == "退出" or self.behavior.is_shifting(player):
                             break
                         elif section1 is None:
                             continue
@@ -206,7 +208,7 @@ class CustomRPGCrafting(Plugin):
                                 case action.SNOWBALL_EXIT:
                                     section2 = m2[y2][x2]
                                     if section2 == "退出" or self.behavior.is_shifting(
-                                        player.name
+                                        player
                                     ):
                                         break
                                     elif section2 is None:

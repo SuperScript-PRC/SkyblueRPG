@@ -51,16 +51,14 @@ class CustomRPGItemScript(Plugin):
         for tagname, text in self.texts.items():
             if item := self.backpack.get_registed_item(tagname):
                 # TODO: directly use Item.disp_name
-                item.on_use = self.create_reader(str(item.disp_name), text)
+                item.on_use_extra["阅读"] = self.create_reader(str(item.disp_name), text)
             else:
                 Print.print_war(f"物品未注册: {tagname}")
 
     def create_reader(self, title: str, text: str):
         def _reader(_, player: Player):
-            "阅读"
             self.read_by_snowmenu(player, title, text)
             self.tutor.check_point("自定义RPG-读物:阅读", player)
-            return True
 
         return _reader
 
@@ -83,8 +81,8 @@ class CustomRPGItemScript(Plugin):
         utils.fill_list_index(textlines, [""] * CONTENT_LEN)
         while 1:
             content = (
-                f"§b{title} §7>>> §7line {content_line + 1} of {content_line_max} §f\n"
-                + "\n".join(textlines[content_line : content_line + CONTENT_LEN])
+                f"§b{title} §7>>> §7line {content_line + 1} of {content_line_max} §f\n§7┃§f "
+                + "\n§7┃§f ".join(textlines[content_line : content_line + CONTENT_LEN])
                 + "\n §3上下滑动屏幕滚动， 左滑退出"
             )
             action = self.sight.wait_next_action(player, content)

@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING
-
 from tooldelta import Player, utils
-from .rpg_lib.rpg_entities import make_entity_panel, PlayerPanel
+from .rpg_lib.constants import AttackType
+from .rpg_lib.rpg_entities import make_entity_panel
+from .rpg_lib.utils import list_sub
 
 if TYPE_CHECKING:
     from . import CustomRPG
@@ -171,10 +172,10 @@ class MenuCommands:
         )
         for playerf in players:
             playerf.hp = 0
-            playerf.died(playerinf)
+            playerf.died(playerinf, death_type=AttackType.NORMAL)
         for mob in mobs:
             mob.hp = 0
-            mob.died(playerinf)
+            mob.died(playerinf, death_type=AttackType.NORMAL)
         self.sys.show_succ(
             player, f"成功清除了 {', '.join(e.name for e in players + mobs)}"
         )
@@ -182,10 +183,82 @@ class MenuCommands:
     def player_check_panel(self, player: Player):
         playerinf = self.sys.player_holder.get_playerinfo(player)
         playerinf._update()
+        p_orig_hpmax = playerinf.original_hpmax
+        p_bas_hpmax = playerinf.basic_hp_max
+        bas_hpmax = playerinf.basic_hp_max - p_bas_hpmax
+        eff_hpmax = playerinf.tmp_hp_max - p_bas_hpmax - bas_hpmax
+        bas_atks = playerinf.basic_atks
+        bas_defs = playerinf.basic_defs
+        eff_atks = list_sub(playerinf.tmp_atks, playerinf.basic_atks)
+        eff_defs = list_sub(playerinf.tmp_defs, playerinf.basic_defs)
+        p_bas_crit_pc = playerinf.original_crit_pc
+        p_bas_crit_add = playerinf.original_crit_add
+        bas_crit_pc = playerinf.basic_crit_pc - p_bas_crit_pc
+        bas_crit_add = playerinf.basic_crit_add - p_bas_crit_add
+        eff_crit_pc = playerinf.tmp_crit_pc - p_bas_crit_pc - bas_crit_pc
+        eff_crit_add = playerinf.tmp_crit_add - p_bas_crit_add - bas_crit_add
+        basic_chg_add = playerinf.basic_chg_add
+        eff_chg_add = playerinf.tmp_chg_add - basic_chg_add
+        bas_eff_hit = playerinf.basic_effect_hit
+        bas_eff_anti = playerinf.basic_effect_anti
+        eff_eff_hit = playerinf.tmp_effect_hit - bas_eff_hit
+        eff_eff_anti = playerinf.tmp_effect_anti - bas_eff_anti
+        # ...
+        elems = self.sys.cfg["基本属性名称"]
+        txts = []
+        n_elems = [elems[f"属性{i}"] for i in range(1, len(elems) + 1)]
+        append = txts.append
+        if eff_hpmax == 0:
+            append(f"§7 - §f生命值上限 §7{p_orig_hpmax}->§f{p_bas_hpmax}§a+{bas_hpmax}")
+        else:
+            append(f"§7 - §f生命值上限 §f{p_bas_hpmax}§a+{bas_hpmax}§6+{eff_hpmax}")
+        for i, elem in enumerate(n_elems):
+            t = ""
+            bas_atk = bas_atks[i]
+            eff_atk = eff_atks[i]
+            bas_def = bas_defs[i]
+            eff_def = eff_defs[i]
+            if eff_atk > 0:
+                t += f"§f{bas_atk}§6+{eff_atk}"
+            else:
+                t += f"§f{bas_atk}"
+            t += "§f / "
+            if eff_def > 0:
+                t += f"§f{bas_def}§6+{eff_def}"
+            else:
+                t += f"§f{bas_def}"
+            append(f"§7 - {elem} (攻击/防御): " + t)
+        if eff_crit_pc > 0:
+            append(
+                f"§7 - §4暴击率 §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
+            )
+        else:
+            append(
+                f"§7 - §4暴击率 §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%"
+            )
+        if eff_crit_add > 0:
+            append(
+                f"§7 - §4暴击伤害加成 §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
+            )
+        else:
+            append(
+                f"§7 - §4暴击伤害加成 §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_add * 100)}%%"
+            )
+        if eff_eff_hit > 0:
+            append(
+                f"§7 - §3效果命中 §f{round(bas_eff_hit * 100)}%%§6+{round(eff_eff_hit * 100)}%%"
+            )
+        else:
+            append(f"§7 - §3效果命中 §f{round(bas_eff_hit * 100)}%%")
+        if eff_eff_anti > 0:
+            append(
+                f"§7 - §3效果抵抗 §f{round(bas_eff_anti * 100)}%%§6+{round(eff_eff_anti * 100)}%%"
+            )
+        else:
+            append(f"§7 - §3效果抵抗 §f{round(bas_eff_anti * 100)}%%")
+
         player.show("§7=========§f｛§l§e属性详情§r§f｝§7=========")
-        player.show(
-            "\n".join(PlayerPanel(playerinf).panel(self.sys.cfg["基本属性名称"]))
-        )
+        player.show("\n".join(txts))
         player.show("§7===========================")
 
     def player_check_effects(self, player: Player):
@@ -198,7 +271,7 @@ class MenuCommands:
             player.show(
                 f"§7 {effect.icon}§f {effect.name}{effect.self_level()}  §7{effect.timeleft_str()}",
             )
-        player.show("§7===========================")
+        player.show("§7========================")
 
     def on_menu_addexp(self, player: Player, args: tuple):
         target, exp = args

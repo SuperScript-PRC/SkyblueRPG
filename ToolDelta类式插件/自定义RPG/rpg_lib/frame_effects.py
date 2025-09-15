@@ -1,6 +1,7 @@
-import random
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING
+from weakref import ref
 from .utils import make_rome_num
 from .constants import SrcType, AttackType, EffectType
 
@@ -10,16 +11,18 @@ if TYPE_CHECKING:
 
 # 玩家或生物身上的 buff
 class RPGEffect:
-    # 显示的图标
     icon = "?"
-    # 显示的名称
+    "显示的图标"
     name = "<?>"
-    # 0 = 仅玩家; 1 = 仅生物; -1 = 玩家或生物都适用
+    "显示的名称"
     target_type = -1
-    # 0 (NEUTRAL) = 中立效果; 1 (POSITIVE) = 有益效果; 2 (NEGATIVE) = 有害效果
+    "0 = 仅玩家; 1 = 仅生物; -1 = 玩家或生物都适用"
     type = EffectType.NEUTRAL
-    # 该 buff 的效果命中值 (实体受到此 buff 的概率为 buff的效果命中值 - 实体的效果抵抗值)
+    "0 (NEUTRAL) = 中立效果; 1 (POSITIVE) = 有益效果; 2 (NEGATIVE) = 有害效果"
     anti = 1.0
+    "该 buff 的效果命中值 (实体受到此 buff 的概率为 buff的效果命中值 - 实体的效果抵抗值)"
+    tags: tuple[str, ...] = ()
+    "buff 标签"
 
     # 初始化 buff
     def __init__(
@@ -29,8 +32,8 @@ class RPGEffect:
         # fromwho: buff 来源, 被哪个实体给予的
         # seconds: 持续时间
         # level: 等级
-        self.target = target
-        self.fromwho = fromwho
+        self._target = ref(target)
+        self._fromwho = ref(fromwho)
         self.seconds = seconds
         self.level = level
         self.tm = time.time()
@@ -86,9 +89,7 @@ class RPGEffect:
         pass
 
     # 当持有者被治疗时
-    def on_cured(
-        self, fromwho: "ENTITY | None", cure_type: SrcType, cured_hp: int
-    ):
+    def on_cured(self, fromwho: "ENTITY | None", cure_type: SrcType, cured_hp: int):
         pass
 
     # 当护甲被击破时
@@ -102,6 +103,21 @@ class RPGEffect:
     # 效果是否已经结束
     def is_timeout(self):
         return self.last_time < 0
+
+    def self_hurt(
+        self,
+        damages: list[int],
+        attacker: "ENTITY | None" = None,
+        msg: str | None = None,
+    ):
+        attacker = attacker or self.fromwho
+        self.target.injured(
+            attacker, SrcType.FROM_EFFECT, AttackType.EFFECT, damages, death_message=msg
+        )
+
+    def self_cure(self, hp: int, cure_from: "ENTITY | None" = None):
+        cure_from = cure_from or self.fromwho
+        self.target.cured(cure_from, SrcType.FROM_EFFECT, hp)
 
     # 格式化自身等级为罗马数字
     def self_level(self):
@@ -119,10 +135,32 @@ class RPGEffect:
         return (
             self.__class__.__name__,
             ("Mob" if isinstance(fromwho, Player) else "Player"),
-            (fromwho.name if isinstance(fromwho, Player) else fromwho.uuid),
+            (fromwho.name if isinstance(fromwho, Player) else getattr(fromwho, "uuid")),
             self.last_time,
             self.level,
         )
+
+    @property
+    def target(self):
+        t = self._target()
+        if t is None:
+            raise ReferenceError("目标不存在")
+        return t
+
+    @target.setter
+    def target(self, target: "ENTITY"):
+        self._target = ref(target)
+
+    @property
+    def fromwho(self):
+        f = self._fromwho()
+        if f is None:
+            raise ReferenceError("来源不存在")
+        return f
+
+    @fromwho.setter
+    def fromwho(self, who: "ENTITY"):
+        self._fromwho = ref(who)
 
     # 获取剩余时间
     @property
@@ -170,35 +208,31 @@ def register_effect_module(module):
         }
     )
 
+
 def add_effect(
     entity: "ENTITY",
-    effect: type[RPGEffect] | RPGEffect,
+    effect: RPGEffect,
     fromwho: "ENTITY",
     sec: int = 1,
     lv: int = 1,
     hit: float = 1,
     **kwargs,
 ):
-    if isinstance(effect, RPGEffect):
-        eff = effect
-    else:
-        eff = effect(entity, fromwho, sec, lv, **kwargs)
-    if fromwho != entity and eff.type == EffectType.NEGATIVE:
-        # 来源不是自己
-        if random.randint(1, int(hit * 1000)) <= entity.tmp_effect_hit * 1000:
-            return
     for effi in entity.effects:
-        if effi.__class__ == eff.__class__:
-            if effi.level == eff.level and eff.seconds > effi.seconds:
+        if effi.__class__ == effect.__class__:
+            effi.fromwho = effect.fromwho
+            if effi.level == effect.level and effect.seconds > effi.last_time:
                 # 等级相等, 取更多秒数的
-                effi.seconds = eff.seconds
-            elif effi.level < eff.level:
+                effi.tm = time.time()
+            elif effi.level < effect.level:
                 # 等级更大
-                effi.level = eff.level
-                effi.seconds = int(effi.level / eff.level * effi.seconds + eff.seconds)
+                effi.level = effect.level
+                effi.seconds = int(
+                    effi.level / effect.level * effi.seconds + effect.seconds
+                )
             break
     else:
-        entity.effects.append(eff)
+        entity.effects.append(effect)
 
 
 def execute_on_basic(entity: "ENTITY"):

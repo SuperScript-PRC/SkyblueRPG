@@ -65,29 +65,30 @@ class Job:
                 player, "b", f"{self.name} §f的经验 +{exp} §7({curr_exp})"
             )
         self.write_datas(player, datas)
-        if self.sys.LOG:
+        if self.sys.LOG_EXP_ADD:
             if exp > 0:
                 self.sys.logger.info(
                     f"{player.name}: {self.name} +exp {exp}({curr_exp})"
                 )
-        self.sys.save(player)
 
     def add_credit(self, player: Player, credit: float):
-        o = self.sys.loaded_jobdatas[player]["credit"]
-        now_credit = self.sys.loaded_jobdatas[player]["credit"] = min(
+        o = self.sys.get_credit(player)
+        now_credit  = min(
             o + credit, CREDIT_MAX
         )
-        if self.sys.LOG:
+        self.sys.set_credit(player, now_credit)
+        if self.sys.LOG_CREDIT_ADD:
             if credit > 0:
                 self.sys.logger.info(
                     f"{player.name}: {self.name} +credit {credit} ({now_credit})"
                 )
 
     def reduce_credit(self, player: Player, credit: float):
-        o = self.sys.loaded_jobdatas[player]["credit"]
-        now_credit = self.sys.loaded_jobdatas[player]["credit"] = max(
+        o = self.sys.get_credit(player)
+        now_credit = max(
             o - credit, CREDIT_MIN
         )
+        self.sys.set_credit(player, now_credit)
         if self.sys.LOG:
             if credit > 0:
                 self.sys.logger.info(

@@ -8,8 +8,8 @@ class WeaponUpgradeConfig:
 
     max_level: int
     "最大等级"
-    upgrade_value_delta_syntax: Callable[[int, int], int] # lambda x, y: int(x * (1 + y / 16) // 2)
-    "升级后属性数值公式 (属性原数值, 道具当前等级) -> 升级后数值"
+    upgrade_value_syntax: Callable[[float, int], int] # lambda x, y: int(x * (1 + y / 16) // 2)
+    "升级后属性数值公式 (属性初始, 道具当前等级) -> 升级后数值"
     available_upgrade_materials: dict[str, int]
     "可用升级材料及单个材料给予的经验值"
     upgrade_exp_syntax: Callable[[int], int]

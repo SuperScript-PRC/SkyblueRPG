@@ -184,8 +184,11 @@ class CarryMan(Job):
         if nearestPlayer == []:
             return
         playername = nearestPlayer[0]
+        player = self.sys.rpg.getPlayer(playername)
+        if not self.has_job(player):
+            return
         self.submit_tasks(
-            self.sys.rpg.getPlayer(playername), (x + x_move, y + 1, z + z_move)
+            player, (x + x_move, y + 1, z + z_move)
         )
 
     def submit_tasks(self, player: Player, pos: tuple[int, int, int]):
@@ -206,7 +209,7 @@ class CarryMan(Job):
                 need_submits[block] = max(0, count - blocks[block])
                 jdatas["salary"] += VAL[block] * min(count, blocks[block])
                 bs_num += 1
-                jdatas["exp_delta"] += submit_count * abs(hash((x, y, z))) % 600 / 100 / c
+                jdatas["exp_delta"] += abs(hash(f"{x,y,z}+{player.name}")) % 600 / 100 * submit_count / c
         jdatas["takens"] = need_submits
         is_ok = sum(need_submits.values()) == 0
         if bs_num == 0:
@@ -245,11 +248,11 @@ class CarryMan(Job):
             assert q, "任务未载入: " + qname
             if q in self.sys.rpg_quests.read_quests(player):
                 self.sys.rpg_quests.finish_quest(player, q)
-            self.add_exp(player, int(1 + jdatas["exp_delta"]))
             jdatas["task_taken"] = False
             jdatas["salary"] = 0
             jdatas["exp_delta"] = 0
             self.write_datas(player, jdatas)
+            self.add_exp(player, int(1 + jdatas["exp_delta"]))
             self.sys.BroadcastEvent(
                 PlayerFinishJobEvent(player, self.name, salary, bs_num).to_broadcast()
             )

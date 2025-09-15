@@ -8,9 +8,9 @@ from types import ModuleType
 from pathlib import Path
 from typing import TYPE_CHECKING
 from collections.abc import Callable
-from tooldelta import cfg, fmts, Player
+from tooldelta import cfg, Player
 
-from .define import ShopSell, ShopSellMeta
+from .define import ShopSell, ShopSellMeta, RealItemSell
 
 if TYPE_CHECKING:
     from . import CustomRPGPlotAndTask, BroadcastListenerCB
@@ -139,7 +139,7 @@ class RegisteredPlot:
             assert cb, "plot._cond_cb is None"
             if cb(target):
                 if plot in valid:
-                    fmts.print_war(f"自定义剧情与任务: 重复的剧情: {plot}")
+                    get_system().print_war(f"自定义剧情与任务: 重复的剧情: {plot}")
                 valid.append(plot)
         return valid
 
@@ -270,11 +270,13 @@ def load_project(basepath: Path):
     bp = os.path.basename(basepath)
     dp = os.path.dirname(basepath)
     sys.path.append(dp)
-    module_name = bp + ".plots"
-    old_modules = sys.modules.copy()
-    module = importlib.import_module(module_name)
-    if module_name in old_modules.keys():
-        importlib.reload(module)
+    for file in basepath.iterdir():
+        if file.is_file() and file.name.endswith(".py") and not file.name.startswith("_"):
+            module_name = bp + "." + file.name.removesuffix(".py")
+            old_modules = sys.modules.copy()
+            module = importlib.import_module(module_name)
+            if module_name in old_modules.keys():
+                importlib.reload(module)
     sys.path.remove(dp)
 
 
@@ -287,7 +289,7 @@ def load_projects():
                 if second_name.is_dir() and not second_name.name.startswith("__"):
                     load_project(second_name)
                     ld += 1
-    fmts.print_inf(f"加载了 {ld} 个大型剧情组.")
+    get_system().print_inf(f"加载了 {ld} 个大型剧情组.")
 
 
 def as_broadcast_listener(
@@ -315,6 +317,7 @@ class dev_customrpg_plot(ModuleType):
     get_system = staticmethod(get_system)
     ShopSell = ShopSell
     ShopSellMeta = ShopSellMeta
+    RealItemSell = RealItemSell
 
     @property
     def Dialogue(self):

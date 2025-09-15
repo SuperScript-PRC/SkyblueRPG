@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass
 from types import CodeType
 from typing import TYPE_CHECKING, Any
-from tooldelta import Plugin, Player, fmts, cfg, utils, plugin_entry
+from tooldelta import Plugin, Player, cfg, utils, plugin_entry
 
 from . import event_apis
 from .upgrade_cfg import RelicUpgradeConfig, WeaponUpgradeConfig
@@ -83,8 +83,8 @@ class CustomRPGUpgrade(Plugin):
 
     def __init__(self, frame):
         super().__init__(frame)
-        fmts.print_inf("§b自定义RPG-升级系统 已加载.")
-        fmts.print_inf(
+        self.print_inf("§b自定义RPG-升级系统 已加载.")
+        self.print_inf(
             "§b想要为你的租赁服量身定制各种提示文本, 可以找SuperScript QQ:2528622340"  # ??
         )
         CFG_STD = {
@@ -101,7 +101,6 @@ class CustomRPGUpgrade(Plugin):
                 "/title [玩家名] title §a世界等级: [等级]\n§a\n§a\n§a",
             ],
         }
-        self.tmpjson = utils.TMPJson
         self.cfg, _ = cfg.get_plugin_config_and_version(
             self.name, CFG_STD, CFG_DEFAULT, self.version
         )
@@ -113,10 +112,9 @@ class CustomRPGUpgrade(Plugin):
                 self.cfg["玩家升级所需经验值的计算公式"], "None", "eval"
             )
         except SyntaxError:
-            fmts.print_err("自定义RPG-升级系统: 计算公式不合法")
+            self.print_err("自定义RPG-升级系统: 计算公式不合法")
             raise SystemExit
         self.ListenPreload(self.on_def)
-        self.ListenActive(self.on_inject)
 
     def on_def(self):
         self.rpg = self.GetPluginAPI("自定义RPG")
@@ -127,13 +125,13 @@ class CustomRPGUpgrade(Plugin):
         cb2bot = self.GetPluginAPI("Cb2Bot通信")
         if TYPE_CHECKING:
             global SlotItem, Item, ItemWeapon, ItemRelic
-            from 自定义RPG import CustomRPG, ItemRelic, ItemWeapon
-            from 前置_聊天栏菜单 import ChatbarMenu
-            from 前置_基本插件功能库 import BasicFunctionLib
-            from 前置_大字替换 import BigCharReplace
-            from 前置_Cb2Bot通信 import TellrawCb2Bot
-            from 虚拟背包 import SlotItem, Item
-            from 雪球菜单v3 import SnowMenuV3
+            from ..自定义RPG import CustomRPG, ItemRelic, ItemWeapon
+            from ..前置_聊天栏菜单 import ChatbarMenu
+            from ..前置_基本插件功能库 import BasicFunctionLib
+            from ..前置_大字替换 import BigCharReplace
+            from ..前置_Cb2Bot通信 import TellrawCb2Bot
+            from ..虚拟背包 import SlotItem, Item
+            from ..雪球菜单v3 import SnowMenuV3
 
             self.rpg: CustomRPG
             self.menu: ChatbarMenu
@@ -145,9 +143,6 @@ class CustomRPGUpgrade(Plugin):
             "sr.anvil.upgrade", lambda x: self.choose_upgrade(self.rpg.getPlayer(x[0]))
         )
         # tellraw @a[tag=sr.rpg_bot] {"rawtext":[{"text":"sr.anvil.upgrade"},{"selector":"@p"}]}
-
-    def on_inject(self):
-        self.check_material_exists()
 
     @utils.thread_func("选择升级样式")
     def choose_upgrade(self, player: Player):
@@ -220,7 +215,7 @@ class CustomRPGUpgrade(Plugin):
     def upgrade_weapon(self, player: Player) -> None:
         rpg = self.rpg
         constants = rpg.constants
-        rpg.player_holder.dump_mainhand_weapon_datas_to_player_basic(
+        rpg.player_holder.dump_mainhand_weapon_datas_to_slotitem(
             rpg.player_holder.get_playerinfo(player)
         )
         storlist = rpg.backpack_holder.list_player_store_with_filter(
@@ -325,8 +320,8 @@ class CustomRPGUpgrade(Plugin):
                     item_weapon_upgrade_fake.exp = min(exp_boost, upgrade_need_exp_fake)
                     if breakMode:
                         break
-                item_upgrade_fake = self.weapon_upgrade_once(
-                    item_weapon_upgrade_fake, upgrade_cofig
+                item_upgrade_fake = self.update_weapon_by_level(
+                    item_weapon_upgrade_fake
                 )
                 output_text += f"{item_orig.disp_name}§r §7Lv.§f{self.bigchar.replaceBig(str(item_weapon.level))} §7> §fLv.§e{self.bigchar.replaceBig(str(item_weapon_upgrade_fake.level))}"
                 output_text += self.format_weapon_data_compared(
@@ -442,9 +437,7 @@ class CustomRPGUpgrade(Plugin):
                 assert material_item, (
                     f"material {tag_name}->material can't be None or empty"
                 )
-                rpg.backpack_holder.removePlayerStore(
-                    player, material_item[0], count
-                )
+                rpg.backpack_holder.removePlayerStore(player, material_item[0], count)
             rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
             item_orig.metadata["Lv"] += 1
             rpg.backpack_holder.addPlayerStore(player, item_orig)
@@ -807,17 +800,18 @@ class CustomRPGUpgrade(Plugin):
             )
             raise SystemExit
 
-    def weapon_upgrade_once(
+    def update_weapon_by_level(
         self,
         item: "ItemWeapon",
-        upgrade_mode: WeaponUpgradeConfig,
     ):
         weapon = self.rpg.find_weapon_class(item.slotItem.item.id)
-        "物品升级一级"
+        upgrade_mode = weapon.upgrade_mode
+        if upgrade_mode is None:
+            return item
         item_level = item.level
         item.atks = [
-            upgrade_mode.upgrade_value_delta_syntax(weapon.basic_atks[i], item_level)
-            for i in range(7)
+            upgrade_mode.upgrade_value_syntax(atk, item_level)
+            for atk in weapon.basic_atks
         ]
         return item
 
@@ -920,32 +914,11 @@ class CustomRPGUpgrade(Plugin):
     def check_spec_item_upgrade(
         self, rule: WeaponUpgradeConfig | RelicUpgradeConfig, level
     ):
-        spec_item = rule.extra_materials
-        if str(level) in spec_item.keys():
-            return spec_item[str(level)]
+        spec_item = rule.upgrade_level_limit_materials
+        if level in spec_item.keys():
+            return spec_item[level]
         else:
             return None
-
-    def check_material_exists(self):
-        for v in self.cfg["道具升级(道具所属组类:升级样式)"].values():
-            # material_val
-            for v1 in v["可用升级材料及单个材料给予的经验值(不提供经验值则填0)"].keys():
-                try:
-                    self.rpg.item_holder.createItems(v1)
-                except ValueError:
-                    fmts.print_err(
-                        f"不存在的升级材料: {v1}, 请在 蔚蓝自定义RPG系统 配置文件中增加"
-                    )
-                    raise SystemExit
-            for v1 in v["升级到这些级数的时候晋阶所需的[材料:数量]"].values():
-                for v2 in v1.keys():
-                    try:
-                        self.rpg.item_holder.createItems(v2)
-                    except KeyError:
-                        fmts.print_err(
-                            f"不存在的升级材料: {v2}, 请在 蔚蓝自定义RPG系统 配置文件中增加"
-                        )
-                        raise SystemExit
 
     def add_player_exp(self, player: Player, exp: int):
         dat_now = self.rpg.player_holder.get_player_basic(player)

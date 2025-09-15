@@ -1,5 +1,6 @@
 import time
 from typing import ClassVar
+from weakref import ref
 from .constants import (
     RelicType,
     SrcType,
@@ -65,7 +66,7 @@ class Weapon:
         durability: int,
         skill_use_last: int,
         charge: int,
-        my_atks: list[int],
+        leveled_atks: list[int],
         metadata: dict | None,
     ):
         """
@@ -79,7 +80,7 @@ class Weapon:
             my_atks: 武器的七种基本属性的攻击
             metadata: 武器额外数据
         """
-        self.owner = owner
+        self._owner = ref(owner)
         self.level = level
         self.exp = exp
         self.killcount = killcount
@@ -87,7 +88,7 @@ class Weapon:
         self.metadata = metadata or {}
         self.skill_use_last = skill_use_last
         self.chg = charge
-        self.common_atks = my_atks
+        self.current_atks = leveled_atks
 
     def on_skill_use(self, target: "ENTITY"):
         "技能使用(有目标), 正常情况下记得 set_cd()"
@@ -115,7 +116,7 @@ class Weapon:
         self.chg = 0
 
     def show_ult(self, text: str):
-        gc = self.owner.system.game_ctrl
+        gc = self.owner.sys.game_ctrl
         gc.player_subtitle(self.owner.name, f"§7终结技 §f「{text}§f」")
         gc.player_title(self.owner.name, "§a")
 
@@ -140,6 +141,13 @@ class Weapon:
     def tag_name(self):
         return self.__class__.__name__
 
+    @property
+    def owner(self):
+        o = self._owner()
+        if o is None:
+            raise ValueError("Owner ref lost")
+        return o
+
 
 # 饰品
 class Relic:
@@ -161,7 +169,7 @@ class Relic:
         metadata: dict | None = None,
     ):
         "初始化"
-        self.owner = owner
+        self._owner = ref(owner)
         self.main_props = main_props
         self.sub_props = sub_props
         self.metadata = metadata or {}
@@ -224,6 +232,13 @@ class Relic:
     @property
     def is_suit_4(self):
         return self.suits >= 4
+
+    @property
+    def owner(self):
+        o = self._owner()
+        if o is None:
+            raise ValueError("Owner ref lost")
+        return o
 
 
 registered_weapons: dict[str, type[Weapon]] = {}
@@ -318,9 +333,9 @@ def execute_on_attack(
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_attack
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(target, src_type, attack_type, atks, is_crit)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_injured(
@@ -335,9 +350,9 @@ def execute_on_injured(
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_injured
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(fromwho, src_type, attack_type, atks, is_crit)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_skill_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
@@ -345,9 +360,9 @@ def execute_on_skill_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_skill_use
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(target)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_ult_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
@@ -355,9 +370,9 @@ def execute_on_ult_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_ult_use
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(target)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_cure(playerinf: "PlayerEntity", fromwho: "PlayerEntity", cured_hp: int):
@@ -365,9 +380,9 @@ def execute_on_cure(playerinf: "PlayerEntity", fromwho: "PlayerEntity", cured_hp
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_cure
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(fromwho, cured_hp)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_cured(playerinf: "PlayerEntity", fromwho: "PlayerEntity", cured_hp: int):
@@ -375,9 +390,9 @@ def execute_on_cured(playerinf: "PlayerEntity", fromwho: "PlayerEntity", cured_h
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_cured
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(fromwho, cured_hp)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_kill(playerinf: "PlayerEntity", target: "ENTITY"):
@@ -385,9 +400,9 @@ def execute_on_kill(playerinf: "PlayerEntity", target: "ENTITY"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_kill
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(target)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_pre_died(playerinf: "PlayerEntity", killer: "ENTITY"):
@@ -395,9 +410,9 @@ def execute_on_pre_died(playerinf: "PlayerEntity", killer: "ENTITY"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_pre_died
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(killer)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_died(playerinf: "PlayerEntity", killer: "ENTITY"):
@@ -405,9 +420,9 @@ def execute_on_died(playerinf: "PlayerEntity", killer: "ENTITY"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_died
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(killer)
-                cbs.append(cb)
+                cbs.append(cb.__func__)
 
 
 def execute_on_break_shield(playerinf: "PlayerEntity", fromwho: "ENTITY"):
@@ -415,6 +430,6 @@ def execute_on_break_shield(playerinf: "PlayerEntity", fromwho: "ENTITY"):
     for relic in playerinf.relics:
         if relic:
             cb = relic.on_break_shield
-            if cb not in cbs:
+            if cb.__func__ not in cbs:
                 cb(fromwho)
-                cbs.append(cb)
+                cbs.append(cb.__func__)

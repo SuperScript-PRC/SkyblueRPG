@@ -20,6 +20,7 @@ class BroadcastType(str, Enum):
     PLAYER_USE_SKILL = "rpg:PlayerUseSkill"
     PLAYER_SET_ULT = "rpg:PlayerSetUlt"
     PLAYER_USE_ULT = "rpg:PlayerUseUlt"
+    MOB_INITED = "rpg:MobInited"
 
 
 class BaseEvent:
@@ -27,6 +28,7 @@ class BaseEvent:
 
     def to_broadcast(self):
         return InternalBroadcast(self.type, self)
+
 
 # TODO: 仅广播玩家直接攻击生物， 不计算效果攻击、 饰品攻击等
 @dataclass
@@ -38,6 +40,7 @@ class PlayerAttackMobEvent(BaseEvent):
     is_crit: bool
     type = BroadcastType.PLAYER_ATTACK_MOB
 
+
 @dataclass
 class MobAttackPlayerEvent(BaseEvent):
     player: "PlayerEntity"
@@ -45,6 +48,7 @@ class MobAttackPlayerEvent(BaseEvent):
     attack_type: AttackType
     damages: list[int]
     type = BroadcastType.MOB_ATTACK_PLAYER
+
 
 @dataclass
 class PlayerAttackPlayerEvent(BaseEvent):
@@ -55,11 +59,20 @@ class PlayerAttackPlayerEvent(BaseEvent):
     is_crit: bool
     type = BroadcastType.PLAYER_ATTACK_PLAYER
 
+
 @dataclass
 class PlayerKillMobEvent(BaseEvent):
     player: "PlayerEntity"
     mob: "MobEntity"
     type = BroadcastType.PLAYER_KILL_MOB
+    drop_item = True
+    drop_exp = True
+
+    def cancel_dropitem(self):
+        self.drop_item = False
+
+    def cancel_dropexp(self):
+        self.drop_exp = False
 
 
 @dataclass
@@ -74,3 +87,9 @@ class PlayerKillPlayerEvent(BaseEvent):
     killer: "PlayerEntity"
     killed: "PlayerEntity"
     type = BroadcastType.PLAYER_KILL_PLAYER
+
+
+@dataclass
+class MobInitedEvent(BaseEvent):
+    mob: "MobEntity"
+    type = BroadcastType.MOB_INITED

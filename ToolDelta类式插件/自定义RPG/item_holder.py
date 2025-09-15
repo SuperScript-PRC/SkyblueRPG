@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 import os
+from tooldelta import Player
 from .rpg_lib import constants, default_cfg, formatter, utils as rpg_utils
 from .rpg_lib.frame_objects import (
     get_registered_weapons,
@@ -10,6 +11,7 @@ from .rpg_lib.frame_objects import (
     Relic,
 )
 from .rpg_lib.utils import render_bar, split_by_display_len, int_time
+from .rpg_lib.lib_rpgitems import ItemWeapon
 
 
 if TYPE_CHECKING:
@@ -40,8 +42,11 @@ class ItemHolder:
             .replace("!", "§f")
         )
         atks = []
+        basic_atks = self.sys.rpg_upgrade.update_weapon_by_level(
+            ItemWeapon.load_from_item(weapon_item)
+        ).atks
         for i, elem in enumerate(self.sys.Types.AllElemTypes):
-            atk = cls.basic_atks[i]
+            atk = basic_atks[i]
             color = self.sys.element_colors[elem]
             if atk > 0:
                 atks.append(f"{color}{atk}")
@@ -75,12 +80,30 @@ class ItemHolder:
         loaded_materials: dict[str, "Item"] = {}
         items_starlevel: dict[str, int] = {}
 
+        def on_abandon_or_unabandon(slotitem: "SlotItem", player: Player):
+            t = slotitem.metadata["trash"] = not slotitem.metadata.get("trash", False)
+            if t:
+                self.sys.show_inf(player, "物品已被标记为弃用")
+            else:
+                self.sys.show_inf(player, "物品已被取消弃用")
+
+        def get_weapon_name_wrapper(name: str):
+            def _weapon_name_wrapper(slotitem: "SlotItem"):
+                o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '--')}>"
+                if slotitem.metadata.get("trash", False):
+                    o += "§7<§cX§7>"
+                return o
+
+            return _weapon_name_wrapper
+
         def get_weapon_description_wrapper(desc: str):
             def _weapon_description_wrapper(weapon: "SlotItem"):
                 max_durability = find_weapon_class(weapon.item.id).default_durability
                 metadata = weapon.metadata
-                atks = metadata["ATKs"]
                 lv = metadata["Lv"]
+                atks = self.sys.rpg_upgrade.update_weapon_by_level(
+                    ItemWeapon.load_from_item(weapon)
+                ).atks
                 killcount = metadata.get("KC", 0)
                 durability = metadata.get("DBL", max_durability)
                 elements = self.sys.elements
@@ -115,9 +138,9 @@ class ItemHolder:
 
         def get_relic_name_wrapper(name: str):
             def _relic_name_wrapper(slotitem: "SlotItem"):
-                o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '???')}>"
+                o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '--')}>"
                 if slotitem.metadata.get("trash", False):
-                    o += "§7<§c☒§7>"
+                    o += "§7<§cX§7>"
                 return o
 
             return _relic_name_wrapper
@@ -180,10 +203,11 @@ class ItemHolder:
         for weapon_name, weapon_cls in get_registered_weapons().items():
             item = self.sys.backpack.Item(
                 weapon_name,
-                weapon_cls.show_name,
+                get_weapon_name_wrapper(weapon_cls.show_name),
                 [weapon_cls.category.to_category()],
                 description=get_weapon_description_wrapper(weapon_cls.description),
                 stackable=False,
+                on_use_extra={"弃置/取消弃置": on_abandon_or_unabandon},
             )
             loaded_weapons[weapon_name] = item
             items_starlevel[weapon_name] = weapon_cls.star_level
@@ -202,6 +226,7 @@ class ItemHolder:
                 description=get_relic_description_wrapper(
                     relic_cls, relic_cls.description
                 ),
+                on_use_extra={"弃置/取消弃置": on_abandon_or_unabandon},
             )
             loaded_relics[relic_name] = item
             items_starlevel[relic_name] = relic_cls.star_level
@@ -236,7 +261,6 @@ class ItemHolder:
                         1,
                         metadata=metadata
                         or {
-                            "ATKs": list(wpcls.basic_atks),
                             "LSU": 0,
                             "Chg": 0,
                             "Lv": 1,
@@ -258,7 +282,9 @@ class ItemHolder:
                     )
                     new_metadata.update({"Lv": 1, "Exp": 0})
                     res.append(
-                        self.sys.backpack.SlotItem(relic_item, 1, metadata=metadata or new_metadata)
+                        self.sys.backpack.SlotItem(
+                            relic_item, 1, metadata=metadata or new_metadata
+                        )
                     )
         else:
             item = self.backpack.get_registed_item(item_tag_name)

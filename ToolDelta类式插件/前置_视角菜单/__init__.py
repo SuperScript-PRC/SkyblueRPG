@@ -35,6 +35,8 @@ class HeadActionEnv:
         return self
 
     def __exit__(self, _, _2, _3):
+        if self.target not in headaction_counter:
+            return
         headaction_counter[self.target] -= 1
         if headaction_counter[self.target] == 0:
             self.sys.game_ctrl.sendwocmd(

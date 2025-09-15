@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from tooldelta import InternalBroadcast, Player
 
 if TYPE_CHECKING:
-    from .define import ShopSell, ShopSellMeta
+    from .define import ShopSell, ShopSellMeta, RealItemSell
 
 
 class BroadcastType(str, Enum):
@@ -23,5 +23,5 @@ class PlayerTradingWithNPCEvent(BaseEvent):
     "玩家与NPC进行交易"
 
     player: "Player"
-    buy_data: "ShopSell | ShopSellMeta"
+    buy_data: "ShopSell | ShopSellMeta | RealItemSell"
     type = BroadcastType.PlayerTradingWithNPC

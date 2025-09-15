@@ -18,6 +18,14 @@ class ShopSell:
     once_limit: int
     cooldown_min: int
 
+    @property
+    def cost_item_dispname(self):
+        return self.cost_item.force_disp()
+
+    @property
+    def sell_item_dispname(self):
+        return self.sell_item.force_disp()
+
     def copy(self):
         return ShopSell(
             self.tag,
@@ -39,6 +47,18 @@ class ShopSellMeta:
     once_limit: int
     cooldown_min: int
 
+    @property
+    def sell_count(self):
+        return self.sell_item.count
+
+    @property
+    def cost_item_dispname(self):
+        return self.cost_item.force_disp()
+
+    @property
+    def sell_item_dispname(self):
+        return self.sell_item.force_disp()
+
     def copy(self):
         return ShopSellMeta(
             self.tag,
@@ -51,3 +71,33 @@ class ShopSellMeta:
 
 
 ShopSellSuperMeta = NotImplemented
+
+
+@dataclass
+class RealItemSell:
+    tag: str
+    cost_item: "Item"
+    cost_count: int
+    sell_item_dispname: str
+    sell_item_id: str
+    sell_item_data: int
+    sell_count: int
+    once_limit: int
+    cooldown_min: int
+
+    @property
+    def cost_item_dispname(self):
+        return self.cost_item.force_disp()
+
+    def copy(self):
+        return RealItemSell(
+            self.tag,
+            self.cost_item,
+            self.cost_count,
+            self.sell_item_dispname,
+            self.sell_item_id,
+            self.sell_item_data,
+            self.sell_count,
+            self.once_limit,
+            self.cooldown_min,
+        )
