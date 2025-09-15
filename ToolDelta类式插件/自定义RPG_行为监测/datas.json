@@ -1,0 +1,9 @@
+{
+  "author": "ToolDelta",
+  "version": "0.0.1",
+  "plugin-type": "classic",
+  "description": "检测实体行为",
+  "pre-plugins": {},
+  "plugin-id": "crpg-behaviours",
+  "enabled": true
+}
