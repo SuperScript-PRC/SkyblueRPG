@@ -283,10 +283,14 @@ class MobHolder:
 
     @utils.thread_func("自定义RPG-怪物生成处理")
     def _handle_mob_spawn(self, dats: list[str]):
+        dic = self.sys.cb2bot.parse_args(dats)
+        mob_type = dic.get("mob_type")
+        mob_uuid = dic.get("mob_uuid")
+        mob_runtimeid = dic.get("mob_runtimeid")
         # with RPG_Lock:
-        if len(dats) == 0:
-            raise ValueError("Fuck 怪物生成")
-        if len(dats) == 1:
+        if mob_type is None:
+            raise ValueError(f"尝试生成未知类型的生物 (uuid={mob_uuid}, runtimeid={mob_runtimeid})")
+        elif mob_uuid is None:
             self.sys.print("出现 UUID 为空的怪物; 正在处理")
             self.sys.game_ctrl.sendwocmd(
                 "scoreboard players add @e[tag=sr.mob] sr:ms_uuid 0"
@@ -300,13 +304,10 @@ class MobHolder:
                 r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] remove sr.mob"
             )
             return
-        mob_typeid = int(dats[0])
-        mob_uuid = dats[1]
-        if len(dats) == 2:
-            mob_runtimeid = None
-        else:
-            mob_runtimeid = int(dats[2])
-        self.mob_spawn(mob_typeid, mob_uuid, mob_runtimeid)
+        mob_type = int(mob_type)
+        if mob_runtimeid is not None:
+            mob_runtimeid = int(mob_runtimeid)
+        self.mob_spawn(mob_type, mob_uuid, mob_runtimeid)
 
     def _mob_died_handler(self, killer: PlayerEntity | MobEntity, mob: MobEntity):
         """
