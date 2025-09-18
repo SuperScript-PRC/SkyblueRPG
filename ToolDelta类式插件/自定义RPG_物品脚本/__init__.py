@@ -22,8 +22,8 @@ class CustomRPGItemScript(Plugin):
         self.backpack = self.GetPluginAPI("虚拟背包")
         if TYPE_CHECKING:
             global SlotItem
-            from 自定义RPG import CustomRPG
-            from 虚拟背包 import VirtuaBackpack
+            from ..自定义RPG import CustomRPG
+            from ..虚拟背包 import VirtuaBackpack
 
             self.rpg: CustomRPG
             self.backpack: VirtuaBackpack

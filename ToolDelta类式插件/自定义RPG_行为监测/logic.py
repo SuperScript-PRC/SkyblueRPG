@@ -2,7 +2,7 @@ from tooldelta import TYPE_CHECKING, utils
 from .define import Event
 
 if TYPE_CHECKING:
-    from . import CustomRPGActionListener, ENTITY
+    from . import CustomRPGActionListener, Entity
 
 
 class LogicCore:
@@ -37,11 +37,11 @@ class LogicCore:
             if status.in_snow:
                 self.on_into_snow(entity)
 
-    def on_into_lava(self, entity: "ENTITY", first_add=True):
+    def on_into_lava(self, entity: "Entity", first_add=True):
         entity.add_effect(self.BURNING, sec=8)
 
-    def on_into_water(self, entity: "ENTITY", first_add=True):
+    def on_into_water(self, entity: "Entity", first_add=True):
         entity.add_effect(self.WET, sec=4)
 
-    def on_into_snow(self, entity: "ENTITY", first_add=True):
+    def on_into_snow(self, entity: "Entity", first_add=True):
         entity.add_effect(self.CURED, sec=2)

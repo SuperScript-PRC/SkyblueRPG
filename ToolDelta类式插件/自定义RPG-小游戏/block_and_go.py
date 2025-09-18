@@ -19,13 +19,17 @@ BLOCK_TYPE_BARRIER = 1
 BLOCK_TYPE_GOLD = 2
 
 
-class BlockAndGo(MiniGame["BlockAndGoStage"]):
-    data_name = "block_and_go"
-    name = "挖金矿"
-    min_player_num = max_player_num = 1
-    winning_gets = 20
-    final_win_give_items = ("吉米克的谜题馈赠",)
-
+class BlockAndGo(
+    MiniGame["BlockAndGoStage"],
+    data_name="block_and_go",
+    name="挖金矿",
+    disp_name="挖金矿",
+    description="帮助骷髅先生挖到金矿！ 你可以通过场地上的 §f↑↓←→§7 按键让骷髅头移动， 骷髅先生会一直向一个方向前进， 直到被方块挡住。 让骷髅先生最终被§a金矿石§7挡住即可通关。 ",
+    min_player_num=1,
+    max_player_num=1,
+    winning_gets=20,
+    final_win_give_items=("吉米克的谜题馈赠",),
+):
     def init(self):
         super().init()
         self.sys.chatbar.add_new_trigger(
@@ -232,9 +236,7 @@ class BlockAndGo(MiniGame["BlockAndGoStage"]):
         sx, sy, sz, ex, ey, ez = tuple(map(int, stage_start_pos_and_end_pos.split(",")))
         ssx, ssy, ssz, cx, cy, cz = tuple(map(int, start_and_ctrl_pos.split(",")))
         levels = levels.split(", ")
-        available_levels = self.get_player_unfinished_levelnames(
-            player, levels
-        )
+        available_levels = self.get_player_unfinished_levelnames(player, levels)
         if not available_levels:
             return
         if not self.display_and_wait(player, stage_id, levels, available_levels):
@@ -294,8 +296,6 @@ class BlockAndGoStage(MiniGameStage["BlockAndGo"]):
         assert test_level
         self.load_from_level(test_level)
         self.player.setTitle("§a开始游戏", "§6帮骷髅先生挖到金矿！")
-
-
 
     def load_from_level(self, level_data: list[tuple[int, int, str]]):
         self.skull_x = -1

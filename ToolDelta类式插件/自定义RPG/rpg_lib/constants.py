@@ -301,3 +301,9 @@ class HurtStatus(IntEnum):
     NOT_HURTED = 0
     EFFECT_HURTED = 1
     BEEN_HURTED = 2
+
+
+class EffectTarget(IntEnum):
+    PLAYER = 0
+    MOB = 1
+    BOTH = 2

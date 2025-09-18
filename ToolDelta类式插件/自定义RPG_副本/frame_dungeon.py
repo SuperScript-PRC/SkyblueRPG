@@ -78,16 +78,14 @@ class Dungeon:
             if (m := sys.rpg.mob_holder.get_mob_class(t))
         }
         awards_fixed, awards_rand = self.get_awards(sys)
-        if awards_fixed and not awards_rand:
-            awards_disp = "§r§f， ".join(awards_fixed)
-        elif not awards_fixed and awards_rand:
-            awards_disp = "§r§f， ".join(awards_rand)
-        elif awards_fixed and awards_rand:
-            awards_disp = (
-                "§r§f， ".join(awards_fixed) + "§7 | " + "§r§f， ".join(awards_rand)
-            )
+        if awards_fixed:
+            awards_fixed_disp = "§r§7， ".join(awards_fixed)
         else:
-            awards_disp = "§7无"
+            awards_fixed_disp = "§7无"
+        if awards_rand:
+            awards_rand_disp = "§r§7， ".join(awards_rand)
+        else:
+            awards_rand_disp = "§7无"
         can_start = (
             player_power := sys.rpg.backpack_holder.getItemCount(player, POWER_ITEM)
         ) >= self.power_cost
@@ -113,15 +111,20 @@ class Dungeon:
                 + sep
                 + "§7[§b◆§7] §b增益效果： 无"
                 + sep
-                + f"§7[§et§7] §e挑战限时： {self.max_challenge_time // 60}分钟 {self.max_challenge_time % 60}秒"
+                + f"§7[§e◔§7] §e挑战限时： {self.max_challenge_time // 60}分钟 {self.max_challenge_time % 60}秒"
                 + sep
                 + "§7[§6!§7] §6可能遭遇：§f\n"
                 + extra_spaces
                 + "§r§f、 ".join(i.show_name for i in mobs)
                 + sep
-                + "§7[§d?§7] §d可能获取：§f\n"
+                + "§7[§d?§7] §d回馈预览：§f\n"
                 + extra_spaces
-                + awards_disp
+                + "§f必定获取： "
+                + awards_fixed_disp
+                + "\n"
+                + extra_spaces
+                + "§d额外概率获取： §f"
+                + awards_rand_disp
                 + sep
                 + "§f选择功能：\n"
                 + extra_spaces
@@ -219,6 +222,7 @@ class Dungeon:
             sys.rpg.show_fail(player, "已超过挑战时间限制， 异穴挑战已退出。")
         else:
             sys.rpg.show_fail(player, "挑战失败..")
+        sys.rpg.player_holder.get_playerinfo(player).add_effect("Immortal", sec=5)
         time.sleep(0.5)
         if fntype.win:
             sys.game_ctrl.sendwocmd(
@@ -324,7 +328,9 @@ class DungeonStage:
             for mob_runtimeid in self.instage_mobs:
                 mob = self.sys.rpg.mob_holder.get_mob_by_runtimeid(mob_runtimeid)
                 if mob:
-                    mob.died(mob, self.sys.rpg.constants.AttackType.OTHER)
+                    mob.ready_died(mob, self.sys.rpg.constants.AttackType.OTHER)
+                else:
+                    self.sys.print_war(f"无法通过 RuntimeID {mob_runtimeid} 找到并清除怪物")
         if fntype is not DungeonFinishType.FRAME_EXIT:
             self.d.player_finish(self.sys, self.player, fntype)
 

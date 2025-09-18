@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
 from weakref import WeakKeyDictionary
 from tooldelta import utils, Player
-from tooldelta.game_utils import getPosXYZ, getTarget
-from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, ENTITY
+from tooldelta.game_utils import getTarget
+from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, Entity
 from .rpg_lib.utils import make_entity_panel
 
 if TYPE_CHECKING:
@@ -22,12 +22,12 @@ class EntityHolder:
     def __init__(self, sys: "CustomRPG"):
         self.sys = sys
         # HP 缓存, 用于计算变化差值
-        self.cached_hp: WeakKeyDictionary[ENTITY, int] = WeakKeyDictionary()
+        self.cached_hp: WeakKeyDictionary[Entity, int] = WeakKeyDictionary()
         # 盾量缓存, 用于计算变化查值
-        self.cached_shield: WeakKeyDictionary[ENTITY, int] = WeakKeyDictionary()
+        self.cached_shield: WeakKeyDictionary[Entity, int] = WeakKeyDictionary()
         # 主要敌人目标
-        self.main_target: WeakKeyDictionary[ENTITY, ENTITY] = WeakKeyDictionary()
-        self.runtimeid_to_entity: dict[int, ENTITY] = {}
+        self.main_target: WeakKeyDictionary[Entity, Entity] = WeakKeyDictionary()
+        self.runtimeid_to_entity: dict[int, Entity] = {}
         self.runtime_id_counter = EntityRuntimeIDCounter(0)
 
     def new_runtimeid(self):
@@ -73,7 +73,7 @@ class EntityHolder:
         return self.runtimeid_to_entity.get(runtimeid)
 
     # 获取玩家 / 怪物的上一次 HP 值
-    def get_last_hp(self, entity: ENTITY):
+    def get_last_hp(self, entity: Entity):
         " -> last_hp, is_new"
         old = self.cached_hp.get(entity)
         # if old != entity.hp:
@@ -82,7 +82,7 @@ class EntityHolder:
         return old or entity.hp, old is None
 
     # 获取玩家 / 怪物的 HP 值变化
-    def get_hp_changed(self, entity: ENTITY):
+    def get_hp_changed(self, entity: Entity):
         old = self.cached_hp.get(entity)
         if old is not None:
             return entity.hp - old
@@ -90,7 +90,7 @@ class EntityHolder:
             return 0
 
     # 更新玩家 / 怪物的上一次 HP 值
-    def update_last_hp(self, entity: ENTITY):
+    def update_last_hp(self, entity: Entity):
         self.check_exists(entity)
         # old = self.cached_hp.get(entity, entity.hp)
         # import traceback
@@ -102,12 +102,12 @@ class EntityHolder:
         self.cached_hp[entity] = entity.hp
 
     # 获取最后一次的护盾值
-    def get_last_shield(self, entity: ENTITY):
+    def get_last_shield(self, entity: Entity):
         old = self.cached_shield.get(entity)
         return old or entity.shield
 
     # 更新最后一次的护盾值
-    def update_last_shield(self, entity: ENTITY):
+    def update_last_shield(self, entity: Entity):
         self.check_exists(entity)
         if isinstance(entity, PlayerEntity):
             self.cached_shield[entity] = entity.shield
@@ -115,7 +115,7 @@ class EntityHolder:
             self.cached_shield[entity] = entity.shield
 
     # 设定实体的目标对手
-    def set_main_target(self, entity: "ENTITY", other: "ENTITY"):
+    def set_main_target(self, entity: "Entity", other: "Entity"):
         self.check_exists(entity, other)
         if entity is other:
             raise ValueError("Cannot set main target to self")
@@ -123,7 +123,7 @@ class EntityHolder:
         self.main_target[other] = entity
 
     # 清除实体的目标对手
-    def unload_main_target(self, entity: "ENTITY"):
+    def unload_main_target(self, entity: "Entity"):
         if entity in self.main_target.keys():
             del self.main_target[entity]
         if entity in self.main_target.values():
@@ -132,14 +132,16 @@ class EntityHolder:
                     del self.main_target[k]
 
     # 获取实体的战斗目标对手
-    def get_main_target(self, entity: "ENTITY"):
+    def get_main_target(self, entity: "Entity"):
         return self.main_target.get(entity)
 
     # 在某人附近获取符合选择器条件的所有实体 -> (玩家名列表, 生物 UUID 列表)
     # 适合在 AOE 时作为检测
-    def get_surrounding_entities(self, fromwho: str, selector_mid: str):
+    def get_surrounding_entities(self, fromwho: Player, selector_mid: str):
         """ """
-        x, y, z = getPosXYZ(fromwho)
+        dim, x, y, z = fromwho.getPos()
+        if dim != 0:
+            raise ValueError("只能在主世界调用")
         # self.game_ctrl.say_to("@a", "pos get ok")
         player_selector = (
             f"@a[x={x},y={y},z={z},m=!1,rm=0.1"
@@ -192,7 +194,7 @@ class EntityHolder:
         # 对于显示实时面板方面:
         # 先列出所有需要显示实时战斗面板的实体 (这些实体的主要战斗目标为玩家)
         # 然后根据玩家的主要战斗目标是否需要显示实时战斗面板以对玩家进行显示
-        can_display_panels: list["ENTITY"] = []
+        can_display_panels: list["Entity"] = []
         for mob in self.sys.mob_holder.mob_data_cache.copy().values():
             can_display_panel = mob.execute_effects_ticking()
             if mob.is_died():
@@ -226,7 +228,7 @@ class EntityHolder:
             if target in can_display_panels:
                 playerinf.player.setActionbar(make_entity_panel(playerinf, target))
 
-    def check_exists(self, *entities: ENTITY):
+    def check_exists(self, *entities: Entity):
         for entity in entities:
             if not entity.exists:
                 raise ValueError(

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from tooldelta import utils, Player
 from . import event_apis
 from .rpg_lib import constants
-from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, ENTITY
+from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, Entity
 
 if TYPE_CHECKING:
     from . import CustomRPG
@@ -85,7 +85,7 @@ class CombatHandler:
         return True
 
     # 玩家使用技能
-    def player_use_skill(self, playerinf: PlayerEntity, target: ENTITY | None):
+    def player_use_skill(self, playerinf: PlayerEntity, target: Entity | None):
         if not (item_hot := playerinf.weapon):
             self.sys.show_fail(playerinf.player, "目前无法使用技能")
             self.sys.display_holder.clear_player_skill_and_ult_setter(playerinf.player)
@@ -103,7 +103,7 @@ class CombatHandler:
         return True
 
     # 玩家使用终结技
-    def player_use_ult(self, playerinf: PlayerEntity, target: ENTITY | None):
+    def player_use_ult(self, playerinf: PlayerEntity, target: Entity | None):
         if not (item_hot := playerinf.weapon):
             self.sys.show_fail(playerinf.player, "目前无法使用终结技")
             self.sys.display_holder.clear_player_skill_and_ult_setter(playerinf.player)
@@ -184,7 +184,7 @@ class CombatHandler:
         self.ensure_kill_handler(playerinf_2, playerinf)
 
     # 在每个有可能造成目标死亡的事件下调用
-    def ensure_kill_handler(self, killer: "ENTITY", killed: "ENTITY"):
+    def ensure_kill_handler(self, killer: "Entity", killed: "Entity"):
         pass
 
     #     if isinstance(killer, PlayerEntity):

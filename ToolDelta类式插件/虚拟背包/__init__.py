@@ -71,12 +71,14 @@ class Item:
     "可否堆叠"
     description: str | Callable[["SlotItem"], str] = ""
     "物品简介"
-    # metadata
-    on_use: Callable[["SlotItem", Player], bool] | None = None
-    "使用该物品时的回调 (使用者, 玩家名) -> 是否不消耗"
-    on_use_extra: dict[str, Callable[["SlotItem", Player], None]] = field(
+    on_use: dict[str, Callable[["SlotItem", Player], None]] = field(
         default_factory=dict
     )
+    "使用该物品时的回调 (槽位物品, 玩家名)"
+    on_get: list[Callable[[Player], bool]] = field(
+        default_factory=list
+    )
+    "得到该物品时的回调 (玩家名) -> 是否仍然给予"
 
     def force_disp(self, slotitem: "SlotItem | None" = None):
         if isinstance(self.disp_name, str):
@@ -208,6 +210,9 @@ class Backpack:
         return resp
 
     def add_item(self, item: Item | SlotItem, count: int = 1, metadata=None):
+        for cb in (item if isinstance(item, Item) else item.item).on_get:
+            if not cb(self.owner):
+                return False
         if isinstance(item, SlotItem):
             metadata = item.metadata
             count = item.count or 1
@@ -232,6 +237,7 @@ class Backpack:
                     self._bag[item.id].append(
                         SlotItem(item, 1, uuid, metadata=metadata or {})
                     )
+        return True
 
     def remove_item(self, item_id: str, count: int = 1, item_uuid: str = ""):
         item_collections = self._bag[item_id]
@@ -381,8 +387,8 @@ class VirtuaBackpack(Plugin):
                 for i, item in enumerate(item_page):
                     starlevel_color = "§7"
                     if self.crpg:
-                        if item.item.id in self.crpg.items_starlevel:
-                            starlevel = self.crpg.items_starlevel[item.item.id]
+                        if self.crpg.item_holder.item_exists(item.item.id):
+                            starlevel = self.crpg.item_holder.get_item_starlevel(item.item.id)
                             starlevel_color = ("§7", "§3", "§9", "§d", "§e")[
                                 starlevel - 1
                             ]
@@ -485,28 +491,8 @@ class VirtuaBackpack(Plugin):
                     case HeadAction.LEFT:
                         return
                     case HeadAction.RIGHT:
-
-                        def _on_use(slotitem: SlotItem, player: Player):
-                            on_use_func = slotitem.item.on_use
-                            if on_use_func is None:
-                                return
-                            resp = on_use_func(slotitem, player)
-                            if not resp:
-                                self.load_backpack(player).remove_item(
-                                    item_selected.item.id, 1, item_selected.uuid
-                                )
-
                         x_section = 0
-                        all_sections: list[
-                            tuple[str, Callable[[SlotItem, Player], None]]
-                        ] = (
-                            [("使用", _on_use)]
-                            if item_selected.item.on_use is not None
-                            else []
-                        )
-                        all_sections.extend(
-                            list(item_selected.item.on_use_extra.items())
-                        )
+                        all_sections = list(item_selected.item.on_use.items())
                         self.game_ctrl.sendwocmd(
                             f"execute as {player} at @s run playsound note.bit @s ~~~ 1 1.41"
                         )
@@ -552,13 +538,18 @@ class VirtuaBackpack(Plugin):
                                     if x_section >= len(all_sections):
                                         x_section = 0
                                 case HeadAction.SNOWBALL_EXIT:
-                                    if all_sections == []:
-                                        pass
+                                    if self.load_backpack(player).find_items(item_selected.id):
+                                        if all_sections == []:
+                                            pass
+                                        else:
+                                            all_sections[x_section][1](
+                                                item_selected, player
+                                            )
+                                            if item_selected.count == 0:
+                                                # What if <0 ?
+                                                return
                                     else:
-                                        all_sections[x_section][1](
-                                            item_selected, player
-                                        )
-
+                                        player.show("§4ERROR: §c背包内没有这个物品")
                     case other:
                         fmts.print_war(
                             f"虚拟背包: 玩家 {player} 的菜单响应退出: {other}"

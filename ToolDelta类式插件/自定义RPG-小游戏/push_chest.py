@@ -73,15 +73,17 @@ def bytes_to_bool_list(
     return [bool(bit) for bit in bits]
 
 
-class PushChest(MiniGame["PushChestStage"]):
-    data_name = "push_chest"
-    name = "推箱子"
-    disp_name = "推箱子"
-    description = "帮助骷髅先生将所有箱子归位！ 你可以通过场地上的 §f↑↓←→§7 按键让骷髅头移动， 当骷髅先生面前有一个箱子时， 向前移动可以向前推动该箱子， 把所有箱子推到§a绿宝石块§7上即可通关。 注意： 骷髅先生没办法一次性推动多个箱子！"
-    min_player_num = max_player_num = 1
-    winning_gets = 20
-    final_win_give_items = ("吉米克的谜题馈赠",)
-
+class PushChest(
+    MiniGame["PushChestStage"],
+    data_name="push_chest",
+    name="推箱子",
+    disp_name="推箱子",
+    description="帮助骷髅先生将所有箱子归位！ 你可以通过场地上的 §f↑↓←→§7 按键让骷髅头移动， 当骷髅先生面前有一个箱子时， 向前移动可以向前推动该箱子， 把所有箱子推到§a绿宝石块§7上即可通关。 注意： 骷髅先生没办法一次性推动多个箱子！",
+    min_player_num=1,
+    max_player_num=1,
+    winning_gets=20,
+    final_win_give_items=("吉米克的谜题馈赠",),
+):
     def init(self):
         self.data_path = self.sys.data_path / "push_chest"
         os.makedirs(self.data_path, exist_ok=True)

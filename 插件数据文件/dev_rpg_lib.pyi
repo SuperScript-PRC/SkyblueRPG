@@ -7,6 +7,7 @@ from ..插件文件.ToolDelta类式插件.自定义RPG.rpg_lib import (
     rpg_entities,
     utils,
 )
+from ..插件文件.ToolDelta类式插件.自定义RPG_升级系统 import CustomRPGUpgrade as upgrade_lib
 
 __all__ = [
     "constants",
@@ -15,5 +16,6 @@ __all__ = [
     "frame_mobs",
     "frame_objects",
     "rpg_entities",
-    "utils",
+    "upgrade_lib",
+    "utils"
 ]

@@ -41,16 +41,21 @@ class CustomRPGMobSpawner(Plugin):
         self.intr = self.GetPluginAPI("前置-世界交互")
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.chatbar = self.GetPluginAPI("聊天栏菜单")
+        self.butils = self.GetPluginAPI("基本插件功能库")
         if TYPE_CHECKING:
+            global Mob
             from 自定义RPG import CustomRPG
+            from 自定义RPG.rpg_lib.frame_mobs import Mob
             from 前置_世界交互 import GameInteractive
             from 前置_Cb2Bot通信 import TellrawCb2Bot
             from 前置_聊天栏菜单 import ChatbarMenu
+            from 前置_基本插件功能库 import BasicFunctionLib
 
             self.rpg: CustomRPG
             self.intr: GameInteractive
             self.cb2bot: TellrawCb2Bot
             self.chatbar: ChatbarMenu
+            self.butils: BasicFunctionLib
         self.cb2bot.regist_message_cb("sr.mob.refresh", self.handler)
         self._iota = 0
 
@@ -117,18 +122,19 @@ class CustomRPGMobSpawner(Plugin):
                     raise ValueError(
                         f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}: {res.OutputMessages[0].Message} (世界未加载)"
                     )
-            self.game_ctrl.sendwocmd(
-                f"scoreboard players set @e[x={x},y={y},z={z},r=1,c=1,tag=!sr.mob,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
+            self.butils.sendaicmd(
+                f"scoreboard players set @e[x={x},y={y},z={z},r=1,c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
             )
             # self.game_ctrl.sendwocmd(
             #     f"effect @e[type={mob_cls.model_id},x={x},y={y},z={z},c=1] resistance 99999 100 true"
             # )
-            self.game_ctrl.sendwocmd(
-                f"tag @e[x={x},y={y},z={z},c=1,tag=!sr.mob,type={mob_cls.model_id}] add sr.mob_uninited"
+            self.butils.sendaicmd(
+                f"scoreboard players set @e[x={x},y={y},z={z},c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_rtid {mob_runtimeid}"
             )
-            self.game_ctrl.sendwocmd(
-                f"scoreboard players set @e[x={x},y={y},z={z},c=1,tag=!sr.mob,type={mob_cls.model_id}] sr:ms_rtid {mob_runtimeid}"
+            self.butils.sendaicmd(
+                f"tag @e[x={x},y={y},z={z},c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] add sr.mob_uninited"
             )
+        self.print_suc(f"生成怪物 {mob_cls.tag_name} 在 {x, y, z} ({mob_runtimeid})")
         return mob_runtimeid
 
     def summon_by_type(self, mob_type: int, x: float, y: float, z: float):
@@ -190,16 +196,15 @@ class CustomRPGMobSpawner(Plugin):
             player.show("§c无效范围")
             return
         player.show("§b设置刷怪点中...")
-        self.place_cbs_at(
-            (x, y, z), mobcfg.type_id, mobcfg.model_id, lmtrange, count, cdmin
+        self.place_mob_summon_cbs(
+            (x, y, z), mobcfg, lmtrange, count, cdmin
         )
         player.show("§a设置完成")
 
-    def place_cbs_at(
+    def place_mob_summon_cbs(
         self,
         xyz: tuple[int, int, int],
-        mob_type: int,
-        mob_id: str,
+        mob: "type[Mob]",
         lmt_range: int,
         lmt_num: int,
         cdmin: int,
@@ -213,7 +218,7 @@ class CustomRPGMobSpawner(Plugin):
                 "rawtext": [
                     {"text": "sr.mob.refresh"},
                     {
-                        "text": f"{x}, {y}, {z}, {mob_id}, {mob_type}, {lmt_num}, {cdmin}"
+                        "text": f"{x}, {y}, {z}, {mob.tag_name}, {mob.type_id}, {lmt_num}, {cdmin}"
                     },
                     {"score": {"name": scb_id, "objective": "sr:mob_spawn"}},
                 ]
@@ -231,7 +236,7 @@ class CustomRPGMobSpawner(Plugin):
         self.intr.place_command_block(
             self.intr.make_packet_command_block_update(
                 (x, y - self.iota, z),
-                f"execute as @e[r={lmt_range + 5},type={mob_id}] run scoreboard players add {scb_id} sr:mob_spawn 1",
+                f"execute as @e[r={lmt_range + 5},scores={{sr:ms_type=}}] run scoreboard players add {scb_id} sr:mob_spawn 1",
                 mode=2,
                 conditional=False,
             )
@@ -265,7 +270,7 @@ class CustomRPGMobSpawner(Plugin):
         self.intr.place_command_block(
             self.intr.make_packet_command_block_update(
                 (x, y - self.iota, z),
-                f"tp @e[y=~{self.iota},r={lmt_range + 5},rm={lmt_range},type={mob_id},scores={{sr:ms_type={mob_type}}}] ~~{self.iota}~",
+                f"tp @e[y=~{self.iota},r={lmt_range + 5},rm={lmt_range},scores={{sr:ms_type={mob.type_id}}}] ~~{self.iota}~",
                 mode=1,
                 conditional=False,
                 tick_delay=10,

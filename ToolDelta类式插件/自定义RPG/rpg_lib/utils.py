@@ -4,7 +4,7 @@ from typing import TypeVar, TYPE_CHECKING
 from tooldelta import cfg, Print
 
 if TYPE_CHECKING:
-    from .rpg_entities import ENTITY, PlayerEntity
+    from .rpg_entities import Entity, PlayerEntity
     from .. import CustomRPG
 
 SYS: "CustomRPG"
@@ -113,7 +113,7 @@ def make_subscript_number(num: int):
     return output + chars[num]
 
 
-def make_effect_icons(who: "ENTITY"):
+def make_effect_icons(who: "Entity"):
     return " ".join(
         [i.icon + "§r§f" + make_subscript_number(i.level) for i in who.effects]
     )
@@ -133,7 +133,7 @@ def props_to_list(prop_dic):
 
 def make_entity_panel(
     playerinf: "PlayerEntity",
-    otherinf: "ENTITY | None",
+    otherinf: "Entity | None",
     player_crit=False,
 ):
     if playerinf is otherinf:

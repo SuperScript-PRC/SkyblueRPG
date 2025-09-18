@@ -36,10 +36,10 @@ class CustomRPGActionListener(Plugin):
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.rpg = self.GetPluginAPI("自定义RPG")
         if TYPE_CHECKING:
-            global ENTITY, MobInitedEvent
+            global Entity, MobInitedEvent
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
             from ..自定义RPG import CustomRPG
-            from ..自定义RPG.rpg_lib.rpg_entities import ENTITY
+            from ..自定义RPG.rpg_lib.rpg_entities import Entity
             from ..自定义RPG.event_apis import MobInitedEvent
 
             self.cb2bot: TellrawCb2Bot
@@ -47,12 +47,12 @@ class CustomRPGActionListener(Plugin):
         for evt in Event:
             get_handler = lambda evt: (lambda args: self.handler(evt, args))  # noqa: E731
             self.cb2bot.regist_message_cb(evt.value, get_handler(evt))
-        self.statuses: WeakKeyDictionary["ENTITY", EntityStatus] = WeakKeyDictionary()
+        self.statuses: WeakKeyDictionary["Entity", EntityStatus] = WeakKeyDictionary()
         self.statuses_pending: dict[int, EntityStatus] = {}
         self.status_changed_listeners: dict[
-            Event, list[Callable[["ENTITY"], None]]
+            Event, list[Callable[["Entity"], None]]
         ] = {}
-        self.frame.add_console_cmd_trigger(["rs"], None, self.name, self.check_refs)
+        # self.frame.add_console_cmd_trigger(["rs"], None, self.name, self.check_refs)
         self.ListenInternalBroadcast(
             self.rpg.event_apis.BroadcastType.MOB_INITED, self.on_init_entity
         )
@@ -64,12 +64,12 @@ class CustomRPGActionListener(Plugin):
         for k in self.statuses:
             self.print(k.name, k.runtime_id, f"refs={getrefcount(k)}")
 
-    def get_status(self, entity: "ENTITY") -> EntityStatus:
+    def get_status(self, entity: "Entity") -> EntityStatus:
         if entity not in self.statuses:
             self.statuses[entity] = EntityStatus()
         return self.statuses[entity]
 
-    def add_event_listener(self, evt: Event, cb: Callable[["ENTITY"], None]):
+    def add_event_listener(self, evt: Event, cb: Callable[["Entity"], None]):
         if evt not in self.status_changed_listeners:
             self.status_changed_listeners[evt] = []
         self.status_changed_listeners[evt].append(cb)
@@ -89,7 +89,7 @@ class CustomRPGActionListener(Plugin):
         e = dat.mob
         if e.runtime_id in self.statuses_pending:
             self.statuses[e] = self.statuses_pending.pop(e.runtime_id)
-            self.print(f"生物状态反挂起: {e.runtime_id}")
+            self.print_suc(f"生物状态反挂起: {e.runtime_id}")
 
     @utils.thread_func("自定义RPG-行为监测:handler")
     def handler(self, evt: Event, args: list[str]):
@@ -100,12 +100,12 @@ class CustomRPGActionListener(Plugin):
             mob_uuid = ""
         entity = self.temp_get_entity(runtime_id, mob_uuid)
         if entity is None:
-            self.print_war(f"RuntimeID 对应实体无效: {runtime_id}")
+            # 存在未被初始化进插件系统的生物, 需要先等待其初始化
+            self.print_war(f"{evt.name}: RuntimeID 对应实体无效: {runtime_id}, 已挂起")
             if runtime_id not in self.statuses_pending:
                 status = self.statuses_pending[runtime_id] = EntityStatus()
             else:
                 status = self.statuses_pending[runtime_id]
-            self.print(f"挂起生物状态: {runtime_id}: {evt.name}")
             self.ready_clear_pending()
         else:
             if entity not in self.statuses:
@@ -144,7 +144,7 @@ class CustomRPGActionListener(Plugin):
     def clear_pending(self):
         if self.statuses_pending:
             self.print_war(
-                f"存在挂起的 RuntimeID > 生物状态: {', '.join(str(i) for i in self.statuses_pending.keys())}"
+                f"存在挂起的 RuntimeID~生物状态: {', '.join(str(i) for i in self.statuses_pending.keys())}"
             )
         self.statuses_pending.clear()
 

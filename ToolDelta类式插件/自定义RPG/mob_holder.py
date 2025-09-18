@@ -64,11 +64,13 @@ class MobHolder:
         self.runtimeid2mob[mob.runtime_id] = mob
         self.mob_data_cache_time[mob.uuid] = int_time()
         self.sys.entity_holder.load_mob(mob)
+        self.sys.BroadcastEvent(event_apis.MobInitedEvent(mob).to_broadcast())
         self.sys.print_inf(
-            f"自定义RPG: 怪物 {mob.cls.tag_name}(ud={mob.uuid}) 生成",
+            f"自定义RPG: 怪物 {mob.cls.tag_name}(ud={mob.uuid},rt={mob.runtime_id}) 生成",
             end="\r",
             need_log=False,
         )
+        # /kill @e[type=tropicalfish]
 
     # 清除怪物缓存数据
     def remove_mob(self, mob: MobEntity):
@@ -114,7 +116,7 @@ class MobHolder:
                 "sr:ms_type", "@e[scores={sr:ms_uuid=" + mob_uuid + "},c=1]"
             )
         except ValueError as err:
-            self.sys.print_war(f"无法获取 UUID 为 {mob_uuid} 的生物的信息: {err}")
+            self.sys.print_war(f"无法获取 UUID 为 {mob_uuid} 的生物的信息: {err}, 已清除生物")
             self.sys.game_ctrl.sendwocmd(f"kill @e[scores={{sr:ms_uuid={mob_uuid}}}]")
             return
         # 对于重新载入的生物, 重新分配 RuntimeID
@@ -137,7 +139,6 @@ class MobHolder:
             f"{mob_runtime_id}"
         )
         self.add_mob(mob)
-        self.sys.BroadcastEvent(event_apis.MobInitedEvent(mob).to_broadcast())
         return mob
 
     # 通过在线的生物的 UUID 获取怪物信息
@@ -289,7 +290,10 @@ class MobHolder:
         mob_runtimeid = dic.get("mob_runtimeid")
         # with RPG_Lock:
         if mob_type is None:
-            raise ValueError(f"尝试生成未知类型的生物 (uuid={mob_uuid}, runtimeid={mob_runtimeid})")
+            self.sys.print_err(f"尝试生成未知类型的生物 (uuid={mob_uuid}, runtimeid={mob_runtimeid})")
+            if mob_uuid is not None:
+                self.sys.game_ctrl.sendwocmd("kill @e[scores={sr:ms_uuid=" + mob_uuid + "}]")
+            return
         elif mob_uuid is None:
             self.sys.print("出现 UUID 为空的怪物; 正在处理")
             self.sys.game_ctrl.sendwocmd(
@@ -320,8 +324,8 @@ class MobHolder:
             func(killer, mob.cls.type_id, mob.uuid)
         expdrag_min, expdrag_max = mob.cls.drop_exp_range
         exp_added = random.choice(range(expdrag_min, expdrag_max))
-        self.sys.game_ctrl.sendwscmd(
-            f"/execute as @e[scores={{sr:ms_uuid={mob.uuid}}}] at @s run kill"
+        self.sys.game_ctrl.sendwocmd(
+            f"kill @e[scores={{sr:ms_uuid={mob.uuid}}}] "
         )
         if isinstance(killer, PlayerEntity):
             evt = event_apis.PlayerKillMobEvent(killer, mob)
@@ -347,10 +351,12 @@ class MobHolder:
                         )
         self.remove_mob(mob)
 
-    def get_mob_by_runtimeid(self, runtimeid: int):
+    def get_mob_by_runtimeid(self, runtimeid: int) -> MobEntity:
         s = self.sys.entity_holder.get_entity_by_runtimeid(runtimeid)
         if s is None:
             raise ValueError(f"Mob runtimeid: {runtimeid} not loaded")
+        elif not isinstance(s, MobEntity):
+            raise ValueError(f"Mob runtimeid: {runtimeid} is not a mob")
         return s
 
     def uninit_runtime_only_mob(self, runtimeid: int):

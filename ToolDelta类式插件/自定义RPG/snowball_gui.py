@@ -294,7 +294,7 @@ class SnowmenuGUI:
             self.sys.player_holder.get_player_basic(
                 player
             ).mainhand_weapons_uuid = old_mainhand_weapons_uuid
-            self.sys.player_holder.update_property_from_basic(
+            self.sys.player_holder.update_playerentity_from_basic(
                 self.sys.player_holder.get_player_basic(player), playerinf
             )
             self.sys.player_holder.save_game_player_data(player)
@@ -547,7 +547,7 @@ class SnowmenuGUI:
                     case None:
                         break
                 last_page = res
-                self.sys.player_holder.update_property_from_basic(
+                self.sys.player_holder.update_playerentity_from_basic(
                     player_basic, self.sys.player_holder.get_playerinfo(player)
                 )
                 self.sys.player_holder.save_game_player_data(player)
@@ -564,11 +564,11 @@ class SnowmenuGUI:
     # 玩家切换主手武器
     @utils.thread_func("玩家轮换武器")
     def _player_switch_weapon(self, player: Player):
-        playerinf = self.sys.player_holder.get_playerinfo(player)
+        entity = self.sys.player_holder.get_playerinfo(player)
         playerbas = self.sys.player_holder.get_player_basic(player)
-        self.sys.player_holder.dump_mainhand_weapon_datas_to_slotitem(playerinf)
+        self.sys.player_holder.dump_mainhand_weapon_datas_to_slotitem(entity)
         self.sys.player_holder.save_game_player_data(player)
-        weapons_uuid = playerbas.mainhand_weapons_uuid
+        weapons_uuid = playerbas.mainhand_weapons_uuid.copy()
         avali_weapons_count = sum(i is not None for i in weapons_uuid)
         if weapons_uuid[0] is None:
             player.setActionbar("§7[§6!§7] §6无法在未使用武器情况下切换武器")
@@ -576,23 +576,24 @@ class SnowmenuGUI:
         if avali_weapons_count < 2:
             player.setActionbar("§7[§6!§7] §6没有武器可供切换")
             return
-        while 1:
+        while True:
             # 使用第一个可用武器
             weapons_uuid.append(weapons_uuid.pop(0))
             if weapons_uuid[0] is not None:
                 break
-        self.sys.player_holder.update_property_from_basic(playerbas, playerinf)
+        playerbas.mainhand_weapons_uuid = weapons_uuid
+        self.sys.player_holder.update_playerentity_from_basic(playerbas, entity)
         self.game_ctrl.sendwocmd(
             f"replaceitem entity {player.safe_name} slot.hotbar 0 air"
         )
         if wp_uuid := playerbas.mainhand_weapons_uuid[0]:
-            weapon_item = self.sys.backpack_holder.getItem(playerinf.player, wp_uuid)
+            weapon_item = self.sys.backpack_holder.getItem(entity.player, wp_uuid)
             assert weapon_item, f"{player.name}的主手物品未找到: {wp_uuid}"
             player.setActionbar(f"§7武器已切换为 {weapon_item.disp_name}")
         else:
             # will never happen?
             player.setActionbar("§7武器已切换为 §6无")
-        self.sys.display_holder.display_skill_cd_to_player(playerinf, force_update=True)
+        self.sys.display_holder.display_skill_cd_to_player(entity, force_update=True)
 
     @utils.thread_func("玩家检查面板")
     def _player_check_panel_simple(self, player: Player):

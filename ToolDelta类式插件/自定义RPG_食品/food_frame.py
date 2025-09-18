@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from 自定义RPG.rpg_lib.rpg_entities import PlayerEntity
+    from ..自定义RPG.rpg_lib.rpg_entities import PlayerEntity
     from . import CustomRPGFood
 
 SYSTEM: "CustomRPGFood | None" = None
@@ -23,20 +23,31 @@ def effect_cls(clsname: str):
 
 
 class RPGFood:
-    tag_name: str = "???"
-    star_level: int = 3
-    show_name: str = "<食品???>"
-    description: str = "<简介???>"
-    stackable: bool = True
-    model_id: str = "apple"
-    model_data: int = 0
-    cure_hp: int = 0
-    cure_hp_percent: float = 0
+    def __init_subclass__(
+        cls,
+        tag_name: str = "???",
+        star_level: int = 3,
+        show_name: str = "<食品???>",
+        description: str = "<简介???>",
+        stackable: bool = True,
+        model_id: str = "apple",
+        model_data: int = 0,
+        cure_hp: int = 0,
+        cure_hp_percent: float = 0,
+    ):
+        cls.tag_name = tag_name
+        cls.star_level = star_level
+        cls.show_name = show_name
+        cls.description = description
+        cls.stackable = stackable
+        cls.model_id = model_id
+        cls.model_data = model_data
+        cls.cure_hp = cure_hp
+        cls.cure_hp_percent = cure_hp_percent
 
     def __init__(self, user: "PlayerEntity"):
         self.user = user
         self.sys = get_system()
-
 
     def eat(self) -> bool:
         "食用此食品, 返回是否不消耗该食品。"

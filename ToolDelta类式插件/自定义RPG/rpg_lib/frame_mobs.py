@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from .constants import SrcType, AttackType
 
 if TYPE_CHECKING:
-    from .rpg_entities import MobEntity, ENTITY
+    from .rpg_entities import MobEntity, Entity
 
 ELEMENTS = tuple[int, int, int, int, int, int, int]
 """
@@ -28,19 +28,36 @@ class Mob:
     - 虚空属性
     - 末影属性
     """
-    model_id: str
-    tag_name: str
-    type_id: int
-    show_name: str
-    max_hp: int
-    atks: ELEMENTS = (0, 0, 0, 0, 0, 0, 0)
-    defs: ELEMENTS = (0, 0, 0, 0, 0, 0, 0)
-    effect_hit: float = 0.0
-    effect_anti: float = 0.0
-    drop_exp_range: tuple[int, int]
-    loots: tuple[tuple[str, int, float], ...]
-    harmful: bool | None = None
-    tags: tuple[str, ...] = ()
+
+    def __init_subclass__(
+        cls,
+        model_id: str,
+        tag_name: str,
+        type_id: int,
+        show_name: str,
+        max_hp: int,
+        drop_exp_range: tuple[int, int],
+        loots: tuple[tuple[str, int, float], ...],
+        atks: ELEMENTS = (0, 0, 0, 0, 0, 0, 0),
+        defs: ELEMENTS = (0, 0, 0, 0, 0, 0, 0),
+        effect_hit: float = 0.0,
+        effect_anti: float = 0.0,
+        harmful: bool | None = None,
+        tags: tuple[str, ...] = (),
+    ):
+        cls.model_id = model_id
+        cls.tag_name = tag_name
+        cls.type_id = type_id
+        cls.show_name = show_name
+        cls.max_hp = max_hp
+        cls.drop_exp_range = drop_exp_range
+        cls.loots = loots
+        cls.atks = atks
+        cls.defs = defs
+        cls.effect_hit = effect_hit
+        cls.effect_anti = effect_anti
+        cls.harmful = harmful
+        cls.tags = tags
 
     @classmethod
     def init(cls, entity: "MobEntity"):
@@ -50,7 +67,7 @@ class Mob:
     def attack(
         cls,
         entity: "MobEntity",
-        target: "ENTITY",
+        target: "Entity",
         src_type: SrcType,
         attack_type: AttackType,
     ):
@@ -59,7 +76,7 @@ class Mob:
     # 返回: 是否拦截此次伤害
     @classmethod
     def injured(
-        cls, entity: "MobEntity", fromwho: "ENTITY", damages: list[int], is_crit: bool
+        cls, entity: "MobEntity", fromwho: "Entity", damages: list[int], is_crit: bool
     ) -> bool:
         return False
 
@@ -68,7 +85,7 @@ class Mob:
     def ready_died(
         cls,
         entity: "MobEntity",
-        killer: "ENTITY",
+        killer: "Entity",
     ) -> bool:
         return True
 

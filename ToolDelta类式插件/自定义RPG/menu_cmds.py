@@ -75,6 +75,20 @@ class MenuCommands:
             self.on_menu_addexp,
             op_only=True,
         )
+        self.menu.add_new_trigger(
+            ["rtestfor"],
+            [("半径", int, 30)],
+            "向玩家添加经验",
+            self.on_menu_testfor_entities,
+            op_only=True,
+        )
+        self.menu.add_new_trigger(
+            ["reffect"],
+            [("效果名", str, None), ("秒数", int, 30), ("等级", int, 1)],
+            "向自己添加效果",
+            self.on_menu_addeffect,
+            op_only=True,
+        )
 
     def on_reset_world_spawn(self, player: Player):
         self.sys.game_ctrl.sendwocmd("setworldspawn 586 262 -170")
@@ -149,7 +163,7 @@ class MenuCommands:
             return
         playerbas.HP = hp
         playerbas.HP_max = hpmax
-        self.sys.player_holder.update_property_from_basic(playerbas, playerinf)
+        self.sys.player_holder.update_playerentity_from_basic(playerbas, playerinf)
         self.sys.player_holder.save_game_player_data(player)
         self.sys.show_inf(
             player,
@@ -168,7 +182,7 @@ class MenuCommands:
                 return
             selector = f"r={r}"
         players, mobs = self.sys.entity_holder.get_surrounding_entities(
-            player.name, selector
+            player, selector
         )
         for playerf in players:
             playerf.hp = 0
@@ -292,3 +306,28 @@ class MenuCommands:
             player,
             "更改成功",
         )
+
+    def on_menu_testfor_entities(self, player: Player, args):
+        r = args[0]
+        if r not in range(1, 1000):
+            self.sys.show_fail(player, "§c无效的半径")
+            return
+        _, mobs = self.sys.entity_holder.get_surrounding_entities(player, f"r={r}")
+        self.sys.show_inf(player, "当前实体信息：")
+        m = [i.cls for i in mobs]
+        mobs_count = {i: m.count(i) for i in set(m)}
+        for mob_cls, mob_amount in mobs_count.items():
+            self.sys.show_inf(player, f" - {mob_cls.show_name}§r§f： {mob_amount}")
+
+    def on_menu_addeffect(self, player: Player, args):
+        effect_name, seconds, lv = args
+        if seconds not in range(1, 1000000000) or lv not in range(1, 65536):
+            self.sys.show_fail(player, "§c无效的等级或秒数")
+            return
+        try:
+            effect = self.sys.find_effect_class(effect_name)
+        except ValueError:
+            self.sys.show_fail(player, "§c无效的效果名")
+            return
+        playerinf = self.sys.player_holder.get_playerinfo(player)
+        playerinf.add_effect(effect, playerinf, seconds, lv, hit=255)

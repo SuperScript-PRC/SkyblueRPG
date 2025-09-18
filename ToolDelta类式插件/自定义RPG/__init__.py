@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import logging
 import traceback
@@ -156,11 +157,13 @@ class CustomRPG(Plugin):
         self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
         self.snowmenu = self.GetPluginAPI("雪球菜单v3", (0, 0, 1))
         self.backpack = self.GetPluginAPI("虚拟背包")
+        self.butils = self.GetPluginAPI("基本插件功能库")
         if TYPE_CHECKING:
             global SlotItem, Item
             from ..前置_聊天栏菜单 import ChatbarMenu
             from ..前置_大字替换 import BigCharReplace
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
+            from ..前置_基本插件功能库 import BasicFunctionLib
             from ..雪球菜单v3 import SnowMenuV3
             from ..自定义RPG_升级系统 import CustomRPGUpgrade
             from ..自定义RPG_剧情与任务 import CustomRPGPlotAndTask
@@ -176,6 +179,7 @@ class CustomRPG(Plugin):
             self.bigchar: BigCharReplace
             self.snowmenu: SnowMenuV3
             self.backpack: VirtuaBackpack
+            self.butils: BasicFunctionLib
             self.rpg_upgrade: CustomRPGUpgrade
             self.rpg_settings: CustomRPGSettings
             self.rpg_quests: CustomRPGPlotAndTask
@@ -401,21 +405,24 @@ class CustomRPG(Plugin):
         self.player_holder.remove_player(player, True)
 
     def show_succ(self, player: Player, msg):
-        player.show(f"§a┃ {msg}")
+        self.show_any(player, "a", msg)
 
     def show_warn(self, player: Player, msg):
-        player.show(f"§6┃ {msg}")
+        self.show_any(player, "6", msg)
 
     def show_fail(self, player: Player, msg):
-        player.show(f"§c┃ {msg}")
+        self.show_any(player, "c", msg)
 
     def show_inf(self, player: Player, msg):
-        player.show(f"§7┃ §f{msg}")
+        self.show_any(player, "7", "§f" + msg)
 
     def show_any(self, target: str | Player, prefix_color_id: str, msg: str):
         if isinstance(target, Player):
-            target = target.name
-        self.game_ctrl.say_to(target, f"§{prefix_color_id}┃ {msg}")
+            target = target.safe_name
+        textjson = {"rawtext": [{"text": f"§{prefix_color_id}┃ {msg}"}]}
+        self.butils.sendaicmd(
+            f"tellraw {target} {json.dumps(textjson, ensure_ascii=False)}"
+        )
 
     def add_weapon_use_listener(
         self, weapon_id: str, listener: Callable[[PlayerEntity], None]

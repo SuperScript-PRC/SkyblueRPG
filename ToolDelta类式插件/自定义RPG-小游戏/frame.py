@@ -12,19 +12,28 @@ if 0:
 
 
 class MiniGame(Generic[StageT]):
-    data_name: str = "unknown_game"
-    name: str = "未知小游戏"
-    disp_name: str = "未知小游戏"
-    description: str = "..."
-    coins: int = 1
-    "需要的谜鉴币数"
-    min_player_num: int = 1
-    "最少玩家数"
-    max_player_num: int = 1
-    "最多玩家数"
-    winning_gets: int = 0
-    "莓单关卡胜利后获取的蔚晶数"
-    final_win_give_items: tuple[str, ...] = ("吉米克的谜题馈赠",)
+    def __init_subclass__(
+        cls,
+        data_name: str = "unknown_game",
+        name: str = "未知小游戏",
+        disp_name: str = "未知小游戏",
+        description: str = "...",
+        coins: int = 1,
+        min_player_num: int = 1,
+        max_player_num: int = 1,
+        winning_gets: int = 0,
+        final_win_give_items: tuple[str, ...] = ("吉米克的谜题馈赠",),
+    ):
+        super().__init_subclass__()
+        cls.data_name = data_name
+        cls.name = name
+        cls.disp_name = disp_name
+        cls.description = description
+        cls.coins = coins
+        cls.min_player_num = min_player_num
+        cls.max_player_num = max_player_num
+        cls.winning_gets = winning_gets
+        cls.final_win_give_items = final_win_give_items
 
     def __init__(self, sys: "CustomRPGGames"):
         self.sys = sys

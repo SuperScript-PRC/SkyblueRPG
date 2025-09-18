@@ -207,7 +207,7 @@ class ItemHolder:
                 [weapon_cls.category.to_category()],
                 description=get_weapon_description_wrapper(weapon_cls.description),
                 stackable=False,
-                on_use_extra={"弃置/取消弃置": on_abandon_or_unabandon},
+                on_use={"弃置/取消弃置": on_abandon_or_unabandon},
             )
             loaded_weapons[weapon_name] = item
             items_starlevel[weapon_name] = weapon_cls.star_level
@@ -226,7 +226,7 @@ class ItemHolder:
                 description=get_relic_description_wrapper(
                     relic_cls, relic_cls.description
                 ),
-                on_use_extra={"弃置/取消弃置": on_abandon_or_unabandon},
+                on_use={"弃置/取消弃置": on_abandon_or_unabandon},
             )
             loaded_relics[relic_name] = item
             items_starlevel[relic_name] = relic_cls.star_level

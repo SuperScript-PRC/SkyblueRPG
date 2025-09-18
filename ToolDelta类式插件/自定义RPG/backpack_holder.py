@@ -88,7 +88,7 @@ class BackpackHolder:
                     self.sys.show_warn(
                         player, "物品栏道具发生变动， 将更新个人战斗数据"
                     )
-                    self.sys.player_holder.update_property_from_basic(
+                    self.sys.player_holder.update_playerentity_from_basic(
                         playerbas, self.sys.player_holder.get_playerinfo(player)
                     )
         return count

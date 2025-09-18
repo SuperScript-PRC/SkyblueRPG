@@ -5,9 +5,8 @@ from tooldelta import Player
 from tooldelta.utils import tempjson
 from . import event_apis
 from .rpg_lib import constants, utils as rpg_utils
-from .rpg_lib.rpg_entities import PlayerEntity, MobEntity
+from .rpg_lib.rpg_entities import PlayerEntity, MobEntity, Entity
 from .rpg_lib.player_basic_data import PlayerBasic
-from .rpg_lib.frame_effects import RPGEffect, find_effect_class
 from .rpg_lib.frame_objects import Relic
 from .rpg_lib.lib_rpgitems import (
     convert_item_to_relic,
@@ -74,16 +73,14 @@ class PlayerHolder:
         if data is None:
             basic_data = PlayerBasic.make_new(self.sys, player)
             data = basic_data.dump()
-        basic_data = PlayerBasic.read_from_data_without_effects(self.sys, player, data)
+        basic_data = PlayerBasic.read_from_data(self.sys, player, data)
         # 加载基础数据
         self.loaded_player_basic_data[player] = basic_data
-        entity = basic_data.to_player_entity_with_orig_crit(
-            gamemode=1 if is_creative else 2
-        )
+        entity = basic_data.to_player_entity()
         # self._player_entities[player] = (
-        #     entity := basic_data.to_player_entity_with_orig_crit()
+        #     entity := basic_data.to_player_entity()
         # )
-        self._init_player_effects(basic_data, entity, data["Effs"])
+        entity.switch_gamemode(1 if is_creative else 2)
         entity.switch_pvp(bool(self.sys.rpg_settings.get_player_setting(player, "pvp")))
         self.sys.game_ctrl.sendwocmd(
             f"scoreboard players set {player.safe_name} sr:ms_rtid {basic_data.runtime_id}"
@@ -140,11 +137,11 @@ class PlayerHolder:
                         relic_suits_4th[relic.category] = relic
         return armor_suits_2nd, armor_suits_4th, relic_suits_2nd, relic_suits_4th
 
-    def update_property_from_basic(self, basic: PlayerBasic, prop: PlayerEntity):
+    def update_playerentity_from_basic(self, basic: PlayerBasic, prop: PlayerEntity):
         """
-        从 PlayerBasic 中获取内容并更新到 PlayerEntity 上
-        当饰品改变等造成 Basic 数据改变时调用
-        从 basic_data 更新武器
+        - 从 PlayerBasic 中获取内容并更新到 PlayerEntity 上
+        - 当饰品改变等造成 Basic 数据改变时调用
+        - 从 basic_data 更新武器
         """
         weapon_uuid = basic.mainhand_weapons_uuid[0]
         if weapon_uuid is None:
@@ -177,8 +174,8 @@ class PlayerHolder:
         prop.relics = relics
         self._update_player_properties(basic.player)
 
-    def update_property_from_basic_easy(self, player: Player):
-        self.update_property_from_basic(
+    def update_playerentity_from_basic_easy(self, player: Player):
+        self.update_playerentity_from_basic(
             self.get_player_basic(player), self.get_playerinfo(player)
         )
 
@@ -187,7 +184,7 @@ class PlayerHolder:
         if player in self.loaded_player_basic_data.keys():
             path = self.sys.path_holder.format_player_basic_path(player)
             playerinf = self.get_playerinfo(player)
-            self.get_player_basic(player).update_from_player_property(playerinf)
+            self.get_player_basic(player).update_from_playerentity(playerinf)
             self.dump_mainhand_weapon_datas_to_slotitem(playerinf)
             tempjson.load_and_write(path, self.get_player_basic(player).dump())
             if unload_path:
@@ -226,26 +223,6 @@ class PlayerHolder:
         item_weapon = ItemWeapon.load_from_item(mainhand_weapon_slot)
         weapon.dump_to_item(item_weapon)
         mainhand_weapon_slot.metadata.update(item_weapon.dump_item().metadata)
-
-    # 初始化玩家身上携带的效果
-    def _init_player_effects(
-        self, playerbas: PlayerBasic, playerdat: PlayerEntity, data: list
-    ):
-        effects: list[RPGEffect] = []
-        for clsname, fromtype, fromwho, seconds, level in data:
-            if fromtype == "Player":
-                if fromwho not in self.sys.game_ctrl.allplayers:
-                    continue
-                mdata = self.get_playerinfo(fromwho)
-            elif fromtype == "Mob":
-                mdata = self.sys.mob_holder.load_mobinfo(fromwho)
-                if mdata is None:
-                    continue
-            else:
-                continue
-            effects.append(find_effect_class(clsname)(playerdat, mdata, seconds, level))
-        playerbas.Effects = effects
-        playerdat.effects = effects
 
     # 更新玩家数据 (更新 basic 数据 到 玩家属性)
     def _update_player_properties(self, player: Player):
@@ -309,7 +286,7 @@ class PlayerHolder:
             effect_anti,
         )
         self.sys.game_ctrl.sendwocmd(
-            f"/scoreboard players set {player.safe_name} sr:mh_weapon {weapon_mainhand_model}"
+            f"scoreboard players set {player.safe_name} sr:mh_weapon {weapon_mainhand_model}"
         )
         # 饰品N件套刷新
         for relic in playerinf.relics:
@@ -319,9 +296,7 @@ class PlayerHolder:
         self.sys.display_holder.display_charge_to_player(playerinf)
 
     # 玩家死亡处理方法
-    def _player_died_handler(
-        self, player: PlayerEntity, killer: PlayerEntity | MobEntity | None
-    ):
+    def _player_died_handler(self, player: PlayerEntity, killer: Entity | None):
         assert isinstance(player, PlayerEntity)
         if isinstance(killer, PlayerEntity):
             self.sys.BroadcastEvent(
@@ -333,9 +308,9 @@ class PlayerHolder:
             )
         self.sys.game_ctrl.sendwocmd(f"/kill {player.name}")
         player.hp = player.tmp_hp_max
-        self.sys.player_holder.get_player_basic(
-            player.player
-        ).update_from_player_property(player)
+        self.sys.player_holder.get_player_basic(player.player).update_from_playerentity(
+            player
+        )
         player.effects.clear()
 
     # 监听玩家设置更改 pvp 模式

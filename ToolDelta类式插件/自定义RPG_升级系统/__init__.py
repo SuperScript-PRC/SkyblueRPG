@@ -200,14 +200,14 @@ class CustomRPGUpgrade(Plugin):
 
     def on_upgrade_weapon(self, player: Player):
         self.upgrade_weapon(player)
-        self.rpg.player_holder.update_property_from_basic(
+        self.rpg.player_holder.update_playerentity_from_basic(
             self.rpg.player_holder.get_player_basic(player),
             self.rpg.player_holder.get_playerinfo(player),
         )
 
     def on_upgrade_relic(self, player: Player):
         self.upgrade_relic(player)
-        self.rpg.player_holder.update_property_from_basic(
+        self.rpg.player_holder.update_playerentity_from_basic(
             self.rpg.player_holder.get_player_basic(player),
             self.rpg.player_holder.get_playerinfo(player),
         )
@@ -346,6 +346,8 @@ class CustomRPGUpgrade(Plugin):
                     rpg.backpack_holder.removePlayerStore(
                         player, material, material_count
                     )
+                    ud = item_orig.uuid
+                    item_upgrade_fake.slotItem.uuid = ud
                     rpg.backpack_holder.removePlayerStore(player, item_orig, 1)
                     rpg.backpack_holder.addPlayerStore(
                         player, item_upgrade_fake.dump_item()
@@ -695,11 +697,13 @@ class CustomRPGUpgrade(Plugin):
                             rpg.show_fail(player, "你没有该物品")
                             continue
                         break
-                    while 1:
+                    while True:
                         resp = self.funclib.waitMsg_with_actbar(
-                            player.name,
+                            player,
                             f"§7§l[§6!§7] §r§6请在聊天栏输入使用 {item_selected.item.id} §6的数量",
                         )
+                        if resp is None:
+                            return
                         if (num := utils.try_int(resp)) is not None:
                             if num <= 0:
                                 rpg.show_warn(

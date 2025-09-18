@@ -47,7 +47,6 @@ class CustomRPGFood(Plugin):
     def on_eat(self, args: list[str]):
         player = self.rpg.getPlayer(args[0])
         if player not in self.food_loaded.keys():
-            # deal 1
             food_uuid = self.rpg.player_holder.get_player_basic(player).metadatas.get(
                 "onhand_food"
             )
@@ -60,9 +59,22 @@ class CustomRPGFood(Plugin):
                 if food is None:
                     return
                 self.food_loaded[player] = food
-        if not (food := self.food_loaded[player]).eat():
+        food = self.food_loaded[player]
+        food_run_out = self.player_eat(player, food)
+        if food_run_out:
+            self.rpg.show_warn(player, "你手上的食物被吃完了..")
+            self.set_food_to_hotbar(player, None)
+        else:
+            self.set_food_to_hotbar(player, food)
+        self.BroadcastEvent(event_apis.PlayerEatEvent(player, food).to_broadcast())
+
+    def player_eat(self, player: Player, food: food_frame.RPGFood):
+        need_reduced = not food.eat()
+        if need_reduced:
             self.rpg.backpack_holder.clearItem(
-                player, food.tag_name, 1, show_to_player=False
+                player,
+                food.tag_name,
+                1,  # , show_to_player=False
             )
             # self.rpg.rpg_upgrade.add_player_exp(player, 1)
             player.show("§a┃ §e吃到了美味的食物。")
@@ -70,12 +82,11 @@ class CustomRPGFood(Plugin):
             player.show(
                 f"§a┃ {self.rpg.item_holder.getOrigItem(food.tag_name).disp_name} §r§e味道不错。"
             )
-        if self.rpg.backpack_holder.getItemCount(player, food.tag_name) <= 0:
+        food_run_out = self.rpg.backpack_holder.getItemCount(player, food.tag_name) <= 0
+        if food_run_out:
             self.rpg.show_warn(player, "你手上的食物被吃完了..")
-            self.set_food_to_hotbar(player, None)
-        else:
-            self.set_food_to_hotbar(player, food)
         self.BroadcastEvent(event_apis.PlayerEatEvent(player, food).to_broadcast())
+        return food_run_out
 
     def load_food_from_basic(self, player: Player, food_uuid: str):
         food_slot = self.rpg.backpack_holder.getItem(player, food_uuid)
@@ -93,9 +104,7 @@ class CustomRPGFood(Plugin):
         playerinf = self.rpg.player_holder.get_playerinfo(player)
         if self.food_loaded.get(player) is None:
             food = self.load_food_from_basic(player, slotitem.uuid)
-            self.rpg.show_succ(
-                player, f"现在可在物品栏食用 §f{slotitem.disp_name}"
-            )
+            self.rpg.show_succ(player, f"现在可在物品栏食用 §f{slotitem.disp_name}")
             self.rpg.show_inf(player, "再次使用可以将食物放回背包")
             self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
                 slotitem.uuid
@@ -113,20 +122,23 @@ class CustomRPGFood(Plugin):
         else:
             del self.food_loaded[player]
             self.set_food_to_hotbar(player, None)
-            self.rpg.show_inf(
-                player, f"你把 §f{slotitem.disp_name} §r§f放回了背包中"
-            )
+            self.rpg.show_inf(player, f"你把 §f{slotitem.disp_name} §r§f放回了背包中")
             self.rpg.player_holder.get_player_basic(player).metadatas["onhand_food"] = (
                 None
             )
-        return True
+
+    def direct_eat(self, slotitem: "SlotItem", player: Player):
+        entity = self.rpg.player_holder.get_playerinfo(player)
+        food = food_frame.registered_foods_tagname[slotitem.id](entity)
+        self.player_eat(player, food)
 
     def inject_use_func(self):
         foods = food_frame.registered_foods_tagname
         for k, v in self.backpack.get_registed_items().items():
             if food := foods.get(k):
                 self.rpg.item_holder.LoadExtraItem(v, food.star_level)
-                v.on_use = self.switch_food
+                v.on_use["拿出/放回"] = self.switch_food
+                v.on_use["食用"] = self.direct_eat
 
     def set_food_to_hotbar(self, player: Player, food: "food_frame.RPGFood | None"):
         player_s = player.safe_name

@@ -303,7 +303,7 @@ class CustomRPGRepair(Plugin):
             self.rpg.backpack_holder.removePlayerStore(player, item_need_repaired, 1)
             item_repaired.uuid = item_need_repaired.uuid  # Avoid strange settings
             self.rpg.backpack_holder.addPlayerStore(player, item_repaired)
-            self.rpg.player_holder.update_property_from_basic_easy(player)
+            self.rpg.player_holder.update_playerentity_from_basicasic_easy(player)
             self.game_ctrl.sendwocmd(
                 f"execute as {player.safe_name} at @s run playsound random.anvil_use"
             )

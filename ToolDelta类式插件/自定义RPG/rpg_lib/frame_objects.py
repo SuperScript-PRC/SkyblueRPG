@@ -1,5 +1,4 @@
 import time
-from typing import ClassVar
 from weakref import ref
 from .constants import (
     RelicType,
@@ -14,7 +13,7 @@ from .lib_rpgitems import ItemWeapon, ItemRelic
 
 if 0:
     from .. import entry as rpg_entry
-    from .rpg_entities import PlayerEntity, ENTITY
+    from .rpg_entities import PlayerEntity, Entity
 
     UpgradeConfigWeapon = rpg_entry.rpg_upgrade.WeaponUpgradeConfig
     UpgradeConfigRelic = rpg_entry.rpg_upgrade.RelicUpgradeConfig
@@ -26,36 +25,42 @@ if 0:
 
 # 道具
 class Weapon:
-    # 显示名
-    show_name: str = "<未命名道具>"
-    # 描述
-    description: str = "无描述"
-    skill_description: str = "无"
-    ult_description: str = "无"
-    # 道具星级
-    star_level: STARLEVEL = 3
-    category: WeaponType = WeaponType.SWORD
-    "组类"
-    default_durability: int = 200
-    "最大耐久度"
-    cd_skill: int = 5
-    "技能冷却秒数"
-    cd_ult: int = 5
-    "终结技冷却秒数"
-    charge_ult: int = 100
-    "终结技所需能量"
-    need_skill_set: bool = True
-    "是否需要在释放技能之前选定目标"
-    need_ult_set: bool = True
-    "是否需要在释放终结技之前选定目标"
-    show_model: ModelType = ModelType.AXE
-    "显示的主手模型"
-    basic_atks: tuple[int, int, int, int, int, int, int] = (0, 0, 0, 0, 0, 0, 0)
-    "武器在初始的攻击 (七种基本元素属性各自的攻击值)"
-    repair_materials: ClassVar[dict[str, int]]
-    "修复耐久所需材料对应的修复值"
-    upgrade_mode: "UpgradeConfigWeapon | None" = None
-    "升级方法"
+
+    def __init_subclass__(
+        cls,
+        show_name: str = "<未命名道具>",
+        description: str = "无描述",
+        skill_description: str = "无",
+        ult_description: str = "无",
+        star_level: STARLEVEL = 3,
+        category: WeaponType = WeaponType.SWORD,
+        default_durability: int = 200,
+        cd_skill: int = 5,
+        cd_ult: int = 5,
+        charge_ult: int = 100,
+        need_skill_set: bool = True,
+        need_ult_set: bool = True,
+        show_model: ModelType = ModelType.AXE,
+        basic_atks: tuple[int, int, int, int, int, int, int] = (0, 0, 0, 0, 0, 0, 0),
+        repair_materials: dict[str, int] = {},
+        upgrade_mode: "UpgradeConfigWeapon | None" = None,
+    ):
+        cls.show_name = show_name
+        cls.description = description
+        cls.skill_description = skill_description
+        cls.ult_description = ult_description
+        cls.star_level = star_level
+        cls.category = category
+        cls.default_durability = default_durability
+        cls.cd_skill = cd_skill
+        cls.cd_ult = cd_ult
+        cls.charge_ult = charge_ult
+        cls.need_skill_set = need_skill_set
+        cls.need_ult_set = need_ult_set
+        cls.show_model = show_model
+        cls.basic_atks = basic_atks
+        cls.repair_materials = repair_materials
+        cls.upgrade_mode = upgrade_mode
 
     def __init__(
         self,
@@ -90,7 +95,7 @@ class Weapon:
         self.chg = charge
         self.current_atks = leveled_atks
 
-    def on_skill_use(self, target: "ENTITY"):
+    def on_skill_use(self, target: "Entity"):
         "技能使用(有目标), 正常情况下记得 set_cd()"
         pass
 
@@ -102,7 +107,7 @@ class Weapon:
         "终结技使用(无目标), 正常情况下记得 clear_charge()"
         pass
 
-    def on_ult_use(self, target: "ENTITY | None"):
+    def on_ult_use(self, target: "Entity | None"):
         "终结技使用(有目标), 正常情况下记得 clear_charge()"
         pass
 
@@ -180,7 +185,7 @@ class Relic:
 
     def on_attack(
         self,
-        target: "ENTITY",
+        target: "Entity",
         src_type: SrcType,
         attack_type: AttackType,
         atks: list[int],
@@ -190,7 +195,7 @@ class Relic:
 
     def on_injured(
         self,
-        fromwho: "ENTITY",
+        fromwho: "Entity",
         src_type: SrcType,
         attack_type: AttackType,
         atks: list[int],
@@ -198,10 +203,10 @@ class Relic:
     ):
         pass
 
-    def on_skill_use(self, target: "ENTITY | None"):
+    def on_skill_use(self, target: "Entity | None"):
         pass
 
-    def on_ult_use(self, target: "ENTITY | None"):
+    def on_ult_use(self, target: "Entity | None"):
         pass
 
     def on_cure(self, fromwho: "PlayerEntity", cured_hp: int):
@@ -210,16 +215,16 @@ class Relic:
     def on_cured(self, fromwho: "PlayerEntity", cured_hp: int):
         pass
 
-    def on_kill(self, target: "ENTITY"):
+    def on_kill(self, target: "Entity"):
         pass
 
-    def on_pre_died(self, killer: "ENTITY"):
+    def on_pre_died(self, killer: "Entity"):
         pass
 
-    def on_died(self, killer: "ENTITY"):
+    def on_died(self, killer: "Entity"):
         pass
 
-    def on_break_shield(self, fromwho: "ENTITY"):
+    def on_break_shield(self, fromwho: "Entity"):
         pass
 
     def update_suit(self):
@@ -323,7 +328,7 @@ def execute_on_use(playerinf: "PlayerEntity"):
 
 def execute_on_attack(
     playerinf: "PlayerEntity",
-    target: "ENTITY",
+    target: "Entity",
     src_type: SrcType,
     attack_type: AttackType,
     atks: list[int],
@@ -340,7 +345,7 @@ def execute_on_attack(
 
 def execute_on_injured(
     playerinf: "PlayerEntity",
-    fromwho: "ENTITY",
+    fromwho: "Entity",
     src_type: SrcType,
     attack_type: AttackType,
     atks: list[int],
@@ -355,7 +360,7 @@ def execute_on_injured(
                 cbs.append(cb.__func__)
 
 
-def execute_on_skill_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
+def execute_on_skill_use(playerinf: "PlayerEntity", target: "Entity | None"):
     cbs = []
     for relic in playerinf.relics:
         if relic:
@@ -365,7 +370,7 @@ def execute_on_skill_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
                 cbs.append(cb.__func__)
 
 
-def execute_on_ult_use(playerinf: "PlayerEntity", target: "ENTITY | None"):
+def execute_on_ult_use(playerinf: "PlayerEntity", target: "Entity | None"):
     cbs = []
     for relic in playerinf.relics:
         if relic:
@@ -395,7 +400,7 @@ def execute_on_cured(playerinf: "PlayerEntity", fromwho: "PlayerEntity", cured_h
                 cbs.append(cb.__func__)
 
 
-def execute_on_kill(playerinf: "PlayerEntity", target: "ENTITY"):
+def execute_on_kill(playerinf: "PlayerEntity", target: "Entity"):
     cbs = []
     for relic in playerinf.relics:
         if relic:
@@ -405,7 +410,7 @@ def execute_on_kill(playerinf: "PlayerEntity", target: "ENTITY"):
                 cbs.append(cb.__func__)
 
 
-def execute_on_pre_died(playerinf: "PlayerEntity", killer: "ENTITY"):
+def execute_on_pre_died(playerinf: "PlayerEntity", killer: "Entity"):
     cbs = []
     for relic in playerinf.relics:
         if relic:
@@ -415,7 +420,7 @@ def execute_on_pre_died(playerinf: "PlayerEntity", killer: "ENTITY"):
                 cbs.append(cb.__func__)
 
 
-def execute_on_died(playerinf: "PlayerEntity", killer: "ENTITY"):
+def execute_on_died(playerinf: "PlayerEntity", killer: "Entity"):
     cbs = []
     for relic in playerinf.relics:
         if relic:
@@ -425,7 +430,7 @@ def execute_on_died(playerinf: "PlayerEntity", killer: "ENTITY"):
                 cbs.append(cb.__func__)
 
 
-def execute_on_break_shield(playerinf: "PlayerEntity", fromwho: "ENTITY"):
+def execute_on_break_shield(playerinf: "PlayerEntity", fromwho: "Entity"):
     cbs = []
     for relic in playerinf.relics:
         if relic:

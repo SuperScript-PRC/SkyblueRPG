@@ -1,6 +1,6 @@
 import random
 from abc import ABCMeta, abstractmethod
-from typing import Callable, TYPE_CHECKING, Union, Self  # noqa: UP035
+from typing import Callable, TYPE_CHECKING, Self  # noqa: UP035
 
 from tooldelta import Player
 from .constants import SrcType, AttackType, HurtStatus
@@ -15,7 +15,6 @@ from . import frame_effects
 from . import frame_mobs
 from .frame_effects import RPGEffect, EffectType, add_effect, find_effect_class
 
-ENTITY = Union["Entity"]
 "实体类型, 包括（数据化的）玩家类型和生物类型"
 SWORD_ICON = ""  # ⚔
 
@@ -50,7 +49,7 @@ class Entity(metaclass=ABCMeta):
         basic_effect_hit: float,
         basic_effect_anti: float,
         effects: list[RPGEffect] | None = None,  # 携带的效果
-        died_func: Callable[[Self, ENTITY | None], None] = lambda killed,
+        died_func: Callable[[Self, "Entity | None"], None] = lambda killed,
         killer: None,  # 死亡回调
     ):
         self.sys = system
@@ -83,7 +82,7 @@ class Entity(metaclass=ABCMeta):
     def add_effect(
         self,
         effect: type[RPGEffect] | RPGEffect | str,
-        fromwho: "ENTITY | None" = None,
+        fromwho: "Entity | None" = None,
         sec: int = 1,
         lv: int = 1,
         hit: float = 1,
@@ -161,7 +160,7 @@ class Entity(metaclass=ABCMeta):
     @abstractmethod
     def attack(
         self,
-        target: ENTITY,
+        target: "Entity",
         src_type: SrcType = SrcType.NORMAL,
         attack_type: AttackType = AttackType.NORMAL,
         atks: list[int] | None = None,
@@ -171,7 +170,7 @@ class Entity(metaclass=ABCMeta):
     @abstractmethod
     def injured(
         self,
-        attacker: ENTITY,
+        attacker: "Entity",
         src_type: SrcType,
         attack_type: AttackType,
         dmgs: list[int],
@@ -185,7 +184,7 @@ class Entity(metaclass=ABCMeta):
 
     def real_injured(
         self,
-        attacker: ENTITY,
+        attacker: "Entity",
         src_type: SrcType,
         damage: int,
     ):
@@ -200,16 +199,16 @@ class Entity(metaclass=ABCMeta):
             self.ready_died(attacker, AttackType.OTHER)
 
     @abstractmethod
-    def cured(self, fromwho: ENTITY, cure_type: SrcType, cured_hp: int):
+    def cured(self, fromwho: "Entity", cure_type: SrcType, cured_hp: int):
         raise NotImplementedError
 
     @abstractmethod
     def ready_died(
-        self, killer: ENTITY, death_type: AttackType, death_message: str | None = None
+        self, killer: "Entity", death_type: AttackType, death_message: str | None = None
     ):
         raise NotImplementedError
 
-    def on_kill_target(self, target: ENTITY):
+    def on_kill_target(self, target: "Entity"):
         frame_effects.execute_on_kill(self, target)
 
     @abstractmethod
@@ -260,7 +259,7 @@ class PlayerEntity(Entity):
         original_crit_pc: float,  # 暴击率
         original_crit_add: float,  # 暴击加成率
         effects: list[RPGEffect] | None = None,  # 携带的效果
-        died_func: Callable[["PlayerEntity", ENTITY | None], None] = lambda killed,
+        died_func: Callable[["PlayerEntity", Entity | None], None] = lambda killed,
         killer: None,  # 死亡回调
     ):
         """
@@ -341,7 +340,7 @@ class PlayerEntity(Entity):
 
     def attack(
         self,
-        target: ENTITY,
+        target: Entity,
         src_type: SrcType = SrcType.NORMAL,
         attack_type: AttackType = AttackType.NORMAL,
         atks: list[int] | None = None,
@@ -361,7 +360,7 @@ class PlayerEntity(Entity):
 
     def final_attack(
         self,
-        target: ENTITY,
+        target: Entity,
         src_type: SrcType,
         attack_type: AttackType,
         must_be_crit=False,
@@ -392,13 +391,13 @@ class PlayerEntity(Entity):
             self.weapon.add_kill_count()
         return self.tmp_atks, is_crit, target.is_died()
 
-    def on_kill_target(self, target: ENTITY):
+    def on_kill_target(self, target: Entity):
         super().on_kill_target(target)
         frame_objects.execute_on_kill(self, target)
 
     def injured(
         self,
-        attacker: ENTITY,
+        attacker: Entity,
         src_type: SrcType,
         attack_type: AttackType,
         dmgs: list[int],
@@ -442,7 +441,7 @@ class PlayerEntity(Entity):
         if self.hp == 0:
             self.ready_died(attacker, attack_type, death_message)
 
-    def cured(self, fromwho: ENTITY, cure_type: SrcType, cured_hp: int):
+    def cured(self, fromwho: Entity, cure_type: SrcType, cured_hp: int):
         frame_effects.execute_on_cure(fromwho, self, cured_hp)
         if isinstance(fromwho, PlayerEntity):
             frame_objects.execute_on_cure(fromwho, self, cured_hp)
@@ -452,7 +451,7 @@ class PlayerEntity(Entity):
         #     self.name, make_entity_panel(self, fromwho if self != fromwho else None)
         # )
 
-    def skill_use(self, target: ENTITY | None):
+    def skill_use(self, target: Entity | None):
         assert self.weapon, "Cannot use SKILL now"
         if target is None:
             self.weapon.on_skill_set()
@@ -461,7 +460,7 @@ class PlayerEntity(Entity):
         frame_effects.execute_on_skill_use(self, target)
         frame_objects.execute_on_skill_use(self, target)
 
-    def ult_use(self, target: ENTITY | None):
+    def ult_use(self, target: Entity | None):
         assert self.weapon, "Cannot use ULT now"
         if target is None:
             self.weapon.on_ult_set()
@@ -471,7 +470,7 @@ class PlayerEntity(Entity):
         frame_objects.execute_on_ult_use(self, target)
 
     def ready_died(
-        self, killer: ENTITY, death_type: AttackType, death_message: str | None = None
+        self, killer: Entity, death_type: AttackType, death_message: str | None = None
     ):
         if self.hp <= 0:
             self.hp = 0
@@ -481,7 +480,7 @@ class PlayerEntity(Entity):
             self.died(killer, death_type, death_message)
 
     def died(
-        self, killer: ENTITY, death_type: AttackType, death_message: str | None = None
+        self, killer: Entity, death_type: AttackType, death_message: str | None = None
     ):
         frame_effects.execute_on_died(self, killer)
         frame_objects.execute_on_died(self, killer)
@@ -512,7 +511,7 @@ class PlayerEntity(Entity):
     def add_effect(
         self,
         effect: type[RPGEffect] | RPGEffect | str,
-        fromwho: "ENTITY | None" = None,
+        fromwho: "Entity | None" = None,
         sec: int = 1,
         lv: int = 1,
         hit: float = 1,
@@ -537,7 +536,7 @@ class PlayerEntity(Entity):
     def run_cmd(self, cmd: str):
         self.sys.game_ctrl.sendwocmd(cmd.replace("%t", '"' + self.player.name + '"'))
 
-    def show_attack(self, target: ENTITY, is_crit: bool):
+    def show_attack(self, target: Entity, is_crit: bool):
         changed = -self.sys.entity_holder.get_hp_changed(target)
         damage_num = self.sys.bigchar.replaceBig(str(changed))
         self.sys.game_ctrl.player_subtitle(
@@ -557,6 +556,9 @@ class PlayerEntity(Entity):
 
     def switch_pvp(self, pvp: bool):
         self.pvp = pvp
+
+    def switch_gamemode(self, gamemode: int):
+        self.gamemode = gamemode
 
     def _update(self):
         self.tmp_atk_add = self.basic_atk_add.copy()
@@ -656,7 +658,7 @@ class MobEntity(Entity):
 
     def attack(
         self,
-        target: ENTITY,
+        target: Entity,
         src_type: SrcType,
         attack_type: AttackType,
         atks: list[int] | None = None,
@@ -670,12 +672,12 @@ class MobEntity(Entity):
         self.final_attack(target, src_type, attack_type)
         return self.tmp_atks, False, target.is_died()
 
-    def final_attack(self, target: ENTITY, src_type: SrcType, attack_type: AttackType):
+    def final_attack(self, target: Entity, src_type: SrcType, attack_type: AttackType):
         self.cls.attack(self, target, src_type, attack_type)
 
     def injured(
         self,
-        attacker: ENTITY,
+        attacker: Entity,
         src_type: SrcType,
         attack_type: AttackType,
         dmgs: list[int],
@@ -710,7 +712,7 @@ class MobEntity(Entity):
         if self.is_died():
             self.ready_died(attacker, attack_type, death_message)
 
-    def cured(self, fromwho: ENTITY, cure_type: SrcType, curehp: int):
+    def cured(self, fromwho: Entity, cure_type: SrcType, curehp: int):
         frame_effects.execute_on_cure(fromwho, self, curehp)
         # 玩家在目前还不能给生物回血
         frame_effects.execute_on_cured(self, fromwho, cure_type, curehp)
@@ -720,10 +722,9 @@ class MobEntity(Entity):
         return self.hp <= 0
 
     def ready_died(
-        self, killer: ENTITY, death_type: AttackType, death_message: str | None = None
+        self, killer: Entity, death_type: AttackType, death_message: str | None = None
     ):
-        if self.hp <= 0:
-            self.hp = 0
+        self.hp = 0
         frame_effects.execute_on_pre_died(self, killer)
         if self.is_died():
             frame_effects.execute_on_died(self, killer)
@@ -731,7 +732,7 @@ class MobEntity(Entity):
                 self.died(killer, death_type, death_message)
 
     def died(
-        self, killer: ENTITY, death_type: AttackType, death_message: str | None = None
+        self, killer: Entity, death_type: AttackType, death_message: str | None = None
     ):
         if isinstance(killer, PlayerEntity):
             self.sys.show_any(
@@ -742,7 +743,7 @@ class MobEntity(Entity):
     def add_effect(
         self,
         effect: type[RPGEffect] | RPGEffect,
-        fromwho: "ENTITY | None" = None,
+        fromwho: "Entity | None" = None,
         sec: int = 1,
         lv: int = 1,
         hit: float = 1,

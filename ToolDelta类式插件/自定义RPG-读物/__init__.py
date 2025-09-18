@@ -51,7 +51,7 @@ class CustomRPGItemScript(Plugin):
         for tagname, text in self.texts.items():
             if item := self.backpack.get_registed_item(tagname):
                 # TODO: directly use Item.disp_name
-                item.on_use_extra["阅读"] = self.create_reader(str(item.disp_name), text)
+                item.on_use["阅读"] = self.create_reader(str(item.disp_name), text)
             else:
                 Print.print_war(f"物品未注册: {tagname}")
 
