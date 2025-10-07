@@ -15,7 +15,7 @@ class BackpackHolder:
         self, player: Player, item_filter: list[str], antis_uuid: list[str] = []
     ):
         "使用过滤器列出玩家背包内符合条件的物品 (过滤器1: 物品分组, 过滤器2: 黑名单UUID)"
-        items = self.backpack.load_backpack(player).find_item_by_category(item_filter)
+        items = self.backpack.load_backpack(player).find_item_by_categories(item_filter)
         if antis_uuid == []:
             return items
         for i in items.copy():

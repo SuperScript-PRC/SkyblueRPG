@@ -74,7 +74,7 @@ class EntityHolder:
 
     # 获取玩家 / 怪物的上一次 HP 值
     def get_last_hp(self, entity: Entity):
-        " -> last_hp, is_new"
+        "-> last_hp, is_new"
         old = self.cached_hp.get(entity)
         # if old != entity.hp:
         #     import traceback
@@ -137,7 +137,7 @@ class EntityHolder:
 
     # 在某人附近获取符合选择器条件的所有实体 -> (玩家名列表, 生物 UUID 列表)
     # 适合在 AOE 时作为检测
-    def get_surrounding_entities(self, fromwho: Player, selector_mid: str):
+    def player_get_surrounding_entities(self, fromwho: Player, selector_mid: str):
         """ """
         dim, x, y, z = fromwho.getPos()
         if dim != 0:
@@ -166,11 +166,24 @@ class EntityHolder:
             ]
         )
         # self.game_ctrl.say_to("@a", "res get ok")
-        assert isinstance(_player_res, list) and not isinstance(_mob_res, list)  # noqa: PT018
+        assert isinstance(_player_res, list)
+        assert not isinstance(_mob_res, list)
         player_res = [
             self.sys.player_holder.get_playerinfo(self.sys.getPlayer(i))
             for i in _player_res
         ]
+        if any(
+            i.Message == "commands.scoreboard.players.score.notFound"
+            for i in _mob_res.OutputMessages
+        ):
+            # 出现了诡异的 sr:mob_uuid 不存在的现象
+            # 那我们就需要去反初始化生物
+            self.sys.mob_holder.uninit_uuid_lost_mob()
+            _mob_res.OutputMessages = [
+                i
+                for i in _mob_res.OutputMessages
+                if i.Message != "commands.scoreboard.players.test.failed"
+            ]
         if (
             len(_mob_res.OutputMessages) > 1
             or _mob_res.OutputMessages[0].Message
@@ -221,7 +234,9 @@ class EntityHolder:
                 else:
                     if not self.sys.player_holder.displayed_effect_last(playerinf):
                         # 可能之前进行的 add_effect() 向玩家展示了状态栏
-                        playerinf.player.setActionbar(make_entity_panel(playerinf, None))
+                        playerinf.player.setActionbar(
+                            make_entity_panel(playerinf, None)
+                        )
                         self.update_last_hp(playerinf)
         for playerinf in self.sys.player_holder._player_entities.values():
             target = self.get_main_target(playerinf)

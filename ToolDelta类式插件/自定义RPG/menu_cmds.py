@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 from tooldelta import Player, utils
-from .rpg_lib.constants import AttackType
+from .rpg_lib.constants import AttackData
 from .rpg_lib.rpg_entities import make_entity_panel
 from .rpg_lib.utils import list_sub
 
@@ -42,7 +42,7 @@ class MenuCommands:
         )
         self.menu.add_new_trigger(
             ["rclear"],
-            [("物品ID", str, None)],
+            [("物品ID", str, None), ("数量", int, 1), ("玩家名", str, "")],
             "清除数据化虚拟物品",
             self.on_menu_clear,
             op_only=True,
@@ -114,25 +114,22 @@ class MenuCommands:
             self.sys.show_fail(player, f"指令出错: {err}")
 
     def on_menu_clear(self, player: Player, args: tuple):
-        if len(args) == 1:
-            count = -1
-        elif len(args) == 2:
-            count = utils.try_int(args[1])
-            if count is None or count <= 0:
-                self.sys.show_fail(player, "指令出错: 数量不正确")
-                return
-        else:
-            self.sys.show_fail(player, "指令出错: 需要 1~2 个参数")
+        item_id, count, target = args
+        if target == "":
+            target = player.name
+        target = self.sys.game_ctrl.players.getPlayerByName(target)
+        if target is None:
+            self.sys.show_fail(player, "§c指令出错: 玩家不存在")
             return
-        item_id = args[0]
         try:
-            r = self.sys.backpack_holder.clearItem(player, item_id, count)
-            self.sys.show_inf(player, f"已清除自己{r}个物品")
+            r = self.sys.backpack_holder.clearItem(target, item_id, count)
+            self.sys.show_inf(player, f"已清除{target.name} {r}个物品")
         except ValueError as err:
             self.sys.show_fail(player, f"指令出错: {err}")
 
     def on_menu_setlv(self, player: Player, args: tuple):
         playerbas = self.sys.player_holder.get_player_basic(player)
+        playerinf = self.sys.player_holder.get_playerinfo(player)
         if len(args) == 1:
             exp = playerbas.Exp
         else:
@@ -141,16 +138,24 @@ class MenuCommands:
         if lv is None or exp is None or lv < 0 or exp < 0:
             self.sys.show_fail(player, "§c无效的等级和经验")
             return
-        playerbas.Level = lv
-        playerbas.Exp = exp
-        self.sys.rpg_upgrade.add_player_exp(player, 0)
-        self.sys.player_holder.save_game_player_data(player)
         self.sys.show_inf(
             player,
-            f"更改当前等级: Level[{lv}] Exp[{exp}§7/{self.sys.rpg_upgrade.get_levelup_exp(playerbas)}§f]",
+            f"旧的等级: Level[{playerbas.Level}] Exp[{playerbas.Exp}§7/{self.sys.rpg_upgrade.get_levelup_exp(playerbas)}§f]",
+        )
+        playerbas.update_from_playerentity(playerinf)
+        playerbas.Level = lv
+        playerbas.Exp = exp
+        self.sys.player_holder.update_playerentity_from_basic_easy(player)
+        self.sys.rpg_upgrade.add_player_exp(player, 0)
+        self.sys.player_holder.save_game_player_data(player)
+        newdata = self.sys.api_holder.get_player_basic(player)
+        self.sys.show_inf(
+            player,
+            f"更改当前等级: Level[{newdata.Level}] Exp[{newdata.Exp}§7/{self.sys.rpg_upgrade.get_levelup_exp(newdata)}§f]",
         )
 
     def on_menu_sethp(self, player: Player, args: tuple):
+        # TODO: 无效
         playerbas = self.sys.player_holder.get_player_basic(player)
         playerinf = self.sys.player_holder.get_playerinfo(player)
         if len(args) == 1:
@@ -181,15 +186,17 @@ class MenuCommands:
                 player.show("请输入一个1~10000内的数值")
                 return
             selector = f"r={r}"
-        players, mobs = self.sys.entity_holder.get_surrounding_entities(
+        players, mobs = self.sys.entity_holder.player_get_surrounding_entities(
             player, selector
         )
         for playerf in players:
+            if playerf.is_creative:
+                continue
             playerf.hp = 0
-            playerf.died(playerinf, death_type=AttackType.NORMAL)
+            playerf.died(playerinf, death_type=AttackData())
         for mob in mobs:
             mob.hp = 0
-            mob.died(playerinf, death_type=AttackType.NORMAL)
+            mob.died(playerinf, death_type=AttackData())
         self.sys.show_succ(
             player, f"成功清除了 {', '.join(e.name for e in players + mobs)}"
         )
@@ -221,11 +228,50 @@ class MenuCommands:
         elems = self.sys.cfg["基本属性名称"]
         txts = []
         n_elems = [elems[f"属性{i}"] for i in range(1, len(elems) + 1)]
-        append = txts.append
+        def append(text: str):
+            txts.append(text)
+            if len(txts) > 5:
+                player.show("\n".join(txts))
+                txts.clear()
+        player.show("§7=========§f｛§l§e属性详情§r§f｝§7=========")
         if eff_hpmax == 0:
-            append(f"§7 - §f生命值上限 §7{p_orig_hpmax}->§f{p_bas_hpmax}§a+{bas_hpmax}")
+            append(f"§7 - §l§f生命值上限§r §7{p_orig_hpmax}->§f{p_bas_hpmax}§a+{bas_hpmax}")
         else:
-            append(f"§7 - §f生命值上限 §f{p_bas_hpmax}§a+{bas_hpmax}§6+{eff_hpmax}")
+            append(f"§7 - §l§f生命值上限§r §f{p_bas_hpmax}§a+{bas_hpmax}§6+{eff_hpmax}")
+        if eff_crit_pc > 0:
+            append(
+                f"§7 - §l§4暴击率§r §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
+            )
+        else:
+            append(
+                f"§7 - §l§4暴击率§r §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%"
+            )
+        if eff_crit_add > 0:
+            append(
+                f"§7 - §l§4暴击伤害加成§r §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
+            )
+        else:
+            append(
+                f"§7 - §l§4暴击伤害加成§r §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_add * 100)}%%"
+            )
+        if eff_eff_hit > 0:
+            append(
+                f"§7 - §l§3效果命中§r §f{round(bas_eff_hit * 100)}%%§6+{round(eff_eff_hit * 100)}%%"
+            )
+        else:
+            append(f"§7 - §l§3效果命中§r §f{round(bas_eff_hit * 100)}%%")
+        if eff_eff_anti > 0:
+            append(
+                f"§7 - §l§3效果抵抗§r §f{round(bas_eff_anti * 100)}%%§6+{round(eff_eff_anti * 100)}%%"
+            )
+        else:
+            append(f"§7 - §l§3效果抵抗§r §f{round(bas_eff_anti * 100)}%%")
+        if eff_eff_anti > 0:
+            append(
+                f"§7 - §l§b充能效率§r §f{round(basic_chg_add * 100)}%%§6+{round(eff_chg_add * 100)}%%"
+            )
+        else:
+            append(f"§7 - §l§b充能效率§r §f{round(basic_chg_add * 100)}%%")
         for i, elem in enumerate(n_elems):
             t = ""
             bas_atk = bas_atks[i]
@@ -242,38 +288,9 @@ class MenuCommands:
             else:
                 t += f"§f{bas_def}"
             append(f"§7 - {elem} (攻击/防御): " + t)
-        if eff_crit_pc > 0:
-            append(
-                f"§7 - §4暴击率 §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
-            )
-        else:
-            append(
-                f"§7 - §4暴击率 §f{round(p_bas_crit_pc * 100)}%%§a+{round(bas_crit_pc * 100)}%%"
-            )
-        if eff_crit_add > 0:
-            append(
-                f"§7 - §4暴击伤害加成 §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_pc * 100)}%%§6+{round(eff_crit_pc * 100)}%%"
-            )
-        else:
-            append(
-                f"§7 - §4暴击伤害加成 §f{round(p_bas_crit_add * 100)}%%§a+{round(bas_crit_add * 100)}%%"
-            )
-        if eff_eff_hit > 0:
-            append(
-                f"§7 - §3效果命中 §f{round(bas_eff_hit * 100)}%%§6+{round(eff_eff_hit * 100)}%%"
-            )
-        else:
-            append(f"§7 - §3效果命中 §f{round(bas_eff_hit * 100)}%%")
-        if eff_eff_anti > 0:
-            append(
-                f"§7 - §3效果抵抗 §f{round(bas_eff_anti * 100)}%%§6+{round(eff_eff_anti * 100)}%%"
-            )
-        else:
-            append(f"§7 - §3效果抵抗 §f{round(bas_eff_anti * 100)}%%")
-
-        player.show("§7=========§f｛§l§e属性详情§r§f｝§7=========")
-        player.show("\n".join(txts))
-        player.show("§7===========================")
+        if txts:
+            player.show("\n".join(txts))
+        player.show("§7==========================")
 
     def player_check_effects(self, player: Player):
         playerinf = self.sys.player_holder.get_playerinfo(player)
@@ -312,7 +329,7 @@ class MenuCommands:
         if r not in range(1, 1000):
             self.sys.show_fail(player, "§c无效的半径")
             return
-        _, mobs = self.sys.entity_holder.get_surrounding_entities(player, f"r={r}")
+        _, mobs = self.sys.entity_holder.player_get_surrounding_entities(player, f"r={r}")
         self.sys.show_inf(player, "当前实体信息：")
         m = [i.cls for i in mobs]
         mobs_count = {i: m.count(i) for i in set(m)}

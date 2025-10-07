@@ -98,10 +98,13 @@ class CustomRPGMobSpawner(Plugin):
         player.show("§a生成生物完成")
 
     def summon(self, mob_tagname: str, x: float, y: float, z: float):
+        """
+        生成生物, 并返回生物的 RuntimeID
+        """
         with PositionLock(int(x), int(y), int(z)):
             mob_runtimeid = self.rpg.entity_holder.new_runtimeid()
             if (mob_cls := self.rpg.mob_holder.get_mob_class(mob_tagname)) is None:
-                raise ValueError(f"无效的怪物标签名: {mob_tagname}")
+                raise ValueError(f"无效的生物标签名: {mob_tagname}")
             if mob_cls.model_id.startswith("mystructure:"):
                 res = self.game_ctrl.sendwscmd_with_resp(
                     f"structure load {mob_cls.model_id} {x} {y} {z}"
@@ -123,17 +126,28 @@ class CustomRPGMobSpawner(Plugin):
                         f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z}: {res.OutputMessages[0].Message} (世界未加载)"
                     )
             self.butils.sendaicmd(
-                f"scoreboard players set @e[x={x},y={y},z={z},r=1,c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
-            )
-            # self.game_ctrl.sendwocmd(
-            #     f"effect @e[type={mob_cls.model_id},x={x},y={y},z={z},c=1] resistance 99999 100 true"
-            # )
-            self.butils.sendaicmd(
-                f"scoreboard players set @e[x={x},y={y},z={z},c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_rtid {mob_runtimeid}"
+                f"scoreboard players set @e[x={x},y={y},z={z},c=1,tag=!sr.mob,"
+                f"tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_type {mob_cls.type_id}"
             )
             self.butils.sendaicmd(
-                f"tag @e[x={x},y={y},z={z},c=1,tag=!sr.mob_uninited,type={mob_cls.model_id}] add sr.mob_uninited"
+                f"scoreboard players set @e[x={x},y={y},z={z},c=1,tag=!sr.mob,"
+                f"tag=!sr.mob_uninited,type={mob_cls.model_id}] sr:ms_rtid {mob_runtimeid}"
             )
+            res = self.game_ctrl.sendwscmd_with_resp(
+                f"tag @e[x={x},y={y},z={z},c=1,r=4,tag=!sr.mob_uninited,tag=!sr.mob,"
+                f"type={mob_cls.model_id}] add sr.mob_uninited"
+            )
+            if res.SuccessCount == 0:
+                raise ValueError(
+                    f"无法生成 {mob_tagname}({mob_cls.model_id}) 在 {x, y, z} (标签不能给予): {res.OutputMessages[0].Message}"
+                )
+            else:
+                self.print_suc(res.as_dict["OutputMessages"][0])
+            # time.sleep(1)
+        # self.butils.sendaicmd(
+        #     f"kill @e[x={x},y={y},z={z},c=1,r=4,"
+        #     f"tag=!sr.mob_uninited,tag=!sr.mob,type={mob_cls.model_id}]"
+        # )
         self.print_suc(f"生成怪物 {mob_cls.tag_name} 在 {x, y, z} ({mob_runtimeid})")
         return mob_runtimeid
 
@@ -156,8 +170,11 @@ class CustomRPGMobSpawner(Plugin):
             self.game_ctrl.say_to("@a", "§6怪物刷新： 时间更新失败")
 
     def on_place_spawner(self, player: Player, args: tuple):
-        _, x, y, z = player.getPos()
+        dim, x, y, z = player.getPos()
         x, y, z = int(x), int(y), int(z)
+        if dim != 0:
+            player.show("§c仅可以在主世界中放置")
+            return
         if args[0] == "r":
             if not game_utils.isCmdSuccess(
                 f"scoreboard players test p_{x}_{y}_{z} sr:mob_timer 0"
@@ -196,9 +213,7 @@ class CustomRPGMobSpawner(Plugin):
             player.show("§c无效范围")
             return
         player.show("§b设置刷怪点中...")
-        self.place_mob_summon_cbs(
-            (x, y, z), mobcfg, lmtrange, count, cdmin
-        )
+        self.place_mob_summon_cbs((x, y, z), mobcfg, lmtrange, count, cdmin)
         player.show("§a设置完成")
 
     def place_mob_summon_cbs(
@@ -236,7 +251,7 @@ class CustomRPGMobSpawner(Plugin):
         self.intr.place_command_block(
             self.intr.make_packet_command_block_update(
                 (x, y - self.iota, z),
-                f"execute as @e[r={lmt_range + 5},scores={{sr:ms_type=}}] run scoreboard players add {scb_id} sr:mob_spawn 1",
+                f"execute as @e[r={lmt_range + 5},scores={{sr:ms_type={mob.type_id}}}] run scoreboard players add {scb_id} sr:mob_spawn 1",
                 mode=2,
                 conditional=False,
             )

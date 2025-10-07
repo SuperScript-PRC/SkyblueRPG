@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from .constants import SrcType, AttackType
+from .constants import SrcType, AttackData
 
 if TYPE_CHECKING:
     from .rpg_entities import MobEntity, Entity
@@ -69,9 +69,9 @@ class Mob:
         entity: "MobEntity",
         target: "Entity",
         src_type: SrcType,
-        attack_type: AttackType,
+        attack_data: AttackData,
     ):
-        target.injured(entity, src_type, attack_type, entity.tmp_atks)
+        target.injured(entity, src_type, attack_data, entity.tmp_atks)
 
     # 返回: 是否拦截此次伤害
     @classmethod

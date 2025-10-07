@@ -25,18 +25,15 @@ class CustomRPGFood(Plugin):
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.rpg = self.GetPluginAPI("自定义RPG")
         self.backpack = self.GetPluginAPI("虚拟背包")
-        self.tutor = self.GetPluginAPI("自定义RPG-教程")
         if TYPE_CHECKING:
             global SlotItem
-            from 前置_Cb2Bot通信 import TellrawCb2Bot
-            from 自定义RPG import CustomRPG
-            from 虚拟背包 import VirtuaBackpack
-            from 自定义RPG_教程 import CustomRPGTutorial
+            from ..前置_Cb2Bot通信 import TellrawCb2Bot
+            from ..自定义RPG import CustomRPG
+            from ..虚拟背包 import VirtuaBackpack
 
             self.cb2bot: TellrawCb2Bot
             self.rpg: CustomRPG
             self.backpack: VirtuaBackpack
-            self.tutor: CustomRPGTutorial
             SlotItem = VirtuaBackpack.SlotItem
         self.cb2bot.regist_message_cb("sr.food_eat", self.on_eat)
         food_loader.load_scripts(self)

@@ -64,7 +64,9 @@ def get_system() -> "CustomRPGPlotAndTask":
     return SYSTEM
 
 
-def format_name(basepath: Path, tagname: str):
+def format_name(basepath: Path, tagname: str, func):
+    if not tagname:
+        tagname = func.__name__
     return f"{basepath.parent.name}/{basepath.name}:{tagname}"
 
 
@@ -94,6 +96,7 @@ class RegisteredPlot:
         self.disposable = disposable
         self._section_text: str | None = None
         self._cond_cb: Callable[[Player], bool] | None = None
+        self.force_play = force_play
         get_system()._regist_plot(self)
 
     def set_as_main(self):
@@ -200,7 +203,7 @@ def plot(
 
     def receiver(pfunc: Callable[[Player], None]):
         p = RegisteredPlot(
-            format_name(now_loading, tagname), linked_to, pfunc, disposable, force_play
+            format_name(now_loading, tagname, pfunc), linked_to, pfunc, disposable, force_play
         )
         return p
 
@@ -221,7 +224,7 @@ def dialogue(
 
         wrapper.__name__ = pfunc.__name__
         p = RegisteredPlot(
-            format_name(now_loading, ""), linked_to, wrapper, disposable, force_play
+            format_name(now_loading, "", pfunc), linked_to, wrapper, disposable, force_play
         )
         return p
 
@@ -240,7 +243,7 @@ def load_project(basepath: Path):
         cfg.check_auto(QUEST_STD, content)
         disp_name = content["显示名"]
         for sub_tagname, quest_raw in content["子任务"].items():
-            tname = format_name(basepath, sub_tagname)
+            tname = format_name(basepath, sub_tagname, None)
             quest = system.RPGQuest(
                 tag_name=tname,
                 show_name=disp_name,
@@ -295,7 +298,7 @@ def load_projects():
 def as_broadcast_listener(
     bound_quest: "CustomRPGPlotAndTask.LegacyQuest", event_name: str
 ):
-    "(System, Player, EventName, DataDict)"
+    "(Player, EventData, DataDict)"
 
     def _wrapper(func: "BroadcastListenerCB"):
         bl = get_system().BroadcastListener(bound_quest, event_name, func)

@@ -57,7 +57,7 @@ class CustomRPGJobs(Plugin):
         # self.loaded_jobdatas: dict[Player, dict] = {}
         self.set_logger()
         self.ListenPreload(self.on_def)
-        self.ListenActive(self.on_inject)
+        self.ListenActive(self.on_inject, priority=-11)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
         self.ListenPacket([PacketIDS.BlockEvent], self.on_pkts)

@@ -75,9 +75,7 @@ class Item:
         default_factory=dict
     )
     "使用该物品时的回调 (槽位物品, 玩家名)"
-    on_get: list[Callable[[Player], bool]] = field(
-        default_factory=list
-    )
+    on_get: list[Callable[[Player], bool]] = field(default_factory=list)
     "得到该物品时的回调 (玩家名) -> 是否仍然给予"
 
     def force_disp(self, slotitem: "SlotItem | None" = None):
@@ -185,7 +183,16 @@ class Backpack:
         else:
             return item
 
-    def find_item_by_category(self, categories: list[str]):
+    def find_item_by_category(self, category: str):
+        resp: list[SlotItem] = []
+        for item_stack in self._bag.values():
+            for c in item_stack[0].item.categories:
+                if c.startswith(category):
+                    resp += item_stack
+
+        return resp
+
+    def find_item_by_categories(self, categories: list[str]):
         resp: list[SlotItem] = []
         for item_stack in self._bag.values():
             for c in item_stack[0].item.categories:
@@ -388,7 +395,9 @@ class VirtuaBackpack(Plugin):
                     starlevel_color = "§7"
                     if self.crpg:
                         if self.crpg.item_holder.item_exists(item.item.id):
-                            starlevel = self.crpg.item_holder.get_item_starlevel(item.item.id)
+                            starlevel = self.crpg.item_holder.get_item_starlevel(
+                                item.item.id
+                            )
                             starlevel_color = ("§7", "§3", "§9", "§d", "§e")[
                                 starlevel - 1
                             ]
@@ -538,7 +547,9 @@ class VirtuaBackpack(Plugin):
                                     if x_section >= len(all_sections):
                                         x_section = 0
                                 case HeadAction.SNOWBALL_EXIT:
-                                    if self.load_backpack(player).find_items(item_selected.id):
+                                    if self.load_backpack(player).find_items(
+                                        item_selected.id
+                                    ):
                                         if all_sections == []:
                                             pass
                                         else:
@@ -565,7 +576,7 @@ class VirtuaBackpack(Plugin):
             index = 0
             sections = list(d.keys())
             self.game_ctrl.sendwocmd(f"execute as {player} at @s run tp ~~~ 0 0")
-            while 1:
+            while True:
                 output_text = f"选择分组 §l{'>'.join(current_levels)}"
                 for i, category in enumerate(d.keys()):
                     is_current_section = index == i

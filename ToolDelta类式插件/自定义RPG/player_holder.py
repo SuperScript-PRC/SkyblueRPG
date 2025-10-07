@@ -77,6 +77,7 @@ class PlayerHolder:
         # 加载基础数据
         self.loaded_player_basic_data[player] = basic_data
         entity = basic_data.to_player_entity()
+        entity._update()
         # self._player_entities[player] = (
         #     entity := basic_data.to_player_entity()
         # )
@@ -97,8 +98,9 @@ class PlayerHolder:
                 f"玩家移除: 玩家 {player.name} 没有被加载到 RPG 系统, 忽略移除"
             )
             return
+        pb = self.get_player_basic(player)
         if normal:
-            self.sys.qq_holder.on_player_leave(self.get_player_basic(player))
+            self.sys.qq_holder.on_player_leave(pb)
         playerinf.set_removed()
         self.save_game_player_data(player, unload_path=True)
         self.sys.entity_holder.unload_player(player)
@@ -165,7 +167,7 @@ class PlayerHolder:
                 relic := self.sys.backpack_holder.getItem(basic.player, relic_uuid)
             ):
                 self.sys.print_war(
-                    f"玩家 {basic.player} 所持饰品UUID无法对应背包物品UUID: {relic_uuid}"
+                    f"玩家 {basic.player.name} 所持饰品UUID无法对应背包物品UUID: {relic_uuid}"
                 )
                 basic.relics_uuid[basic.relics_uuid.index(relic_uuid)] = None
             else:
@@ -298,6 +300,7 @@ class PlayerHolder:
     # 玩家死亡处理方法
     def _player_died_handler(self, player: PlayerEntity, killer: Entity | None):
         assert isinstance(player, PlayerEntity)
+        self.sys.BroadcastEvent(event_apis.PlayerDiedEvent(player).to_broadcast())
         if isinstance(killer, PlayerEntity):
             self.sys.BroadcastEvent(
                 event_apis.PlayerKillPlayerEvent(killer, player).to_broadcast()

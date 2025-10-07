@@ -2,7 +2,7 @@ import time
 from typing import TYPE_CHECKING
 from weakref import ref
 from .utils import make_rome_num
-from .constants import SrcType, AttackType, EffectType, EffectTarget
+from .constants import SrcType, AttackData, EffectType, EffectTarget
 
 if TYPE_CHECKING:
     from .rpg_entities import Entity
@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 # 玩家或生物身上的 buff
 class RPGEffect:
-
     def __init_subclass__(
         cls,
         icon: str,
@@ -19,6 +18,8 @@ class RPGEffect:
         type: EffectType = EffectType.NEUTRAL,
         tags: tuple[str, ...] = (),
         hit: float = 1.0,
+        *,
+        visible: bool = True,
     ):
         """
         效果 (Buff) 类。
@@ -37,6 +38,7 @@ class RPGEffect:
         cls.type = type
         cls.tags = tags
         cls.hit = hit
+        cls.visible = visible
 
     # 初始化 buff
     def __init__(
@@ -52,6 +54,9 @@ class RPGEffect:
         self.level = level
         self.tm = time.time()
 
+    def doc(self):
+        return self.__doc__ or "无介绍"
+
     # 当被添加后, 每次刷新前
     def on_basic(self):
         pass
@@ -61,7 +66,7 @@ class RPGEffect:
         self,
         target: "Entity",
         src_type: SrcType,
-        attack_type: AttackType,
+        attack_data: AttackData,
         dmgs: list[int],
         iscrit: bool,
     ):
@@ -72,7 +77,7 @@ class RPGEffect:
         self,
         fromwho: "Entity",
         src_type: SrcType,
-        attack_type: AttackType,
+        attack_data: AttackData,
         dmgs: list[int],
         iscrit: bool,
     ):
@@ -126,7 +131,7 @@ class RPGEffect:
     ):
         attacker = attacker or self.fromwho
         self.target.injured(
-            attacker, SrcType.FROM_EFFECT, AttackType.EFFECT, damages, death_message=msg
+            attacker, SrcType.FROM_EFFECT, AttackData(), damages, death_message=msg
         )
 
     def self_cure(self, hp: int, cure_from: "Entity | None" = None):
@@ -139,6 +144,8 @@ class RPGEffect:
 
     # 格式化 buff 剩余时间为 MM:SS
     def timeleft_str(self):
+        if self.last_time > 0x7FFFFFFF:
+            return "**:**"
         m, s = divmod(self.last_time, 60)
         return f"{m:02d}:{s:02d}"
 
@@ -176,9 +183,21 @@ class RPGEffect:
             raise ReferenceError("来源不存在")
         return f
 
+    def fromwho_as_player(self):
+        PlayerEntity = get_entity_module().PlayerEntity
+        if not isinstance(self.fromwho, PlayerEntity):
+            raise ValueError("来源不是玩家")
+        return self.fromwho
+
     @fromwho.setter
     def fromwho(self, who: "Entity"):
         self._fromwho = ref(who)
+
+    def target_as_player(self):
+        PlayerEntity = get_entity_module().PlayerEntity
+        if not isinstance(self.target, PlayerEntity):
+            raise ValueError("目标不是玩家")
+        return self.target
 
     # 获取剩余时间
     @property
@@ -262,24 +281,24 @@ def execute_on_attack(
     entity: "Entity",
     target: "Entity",
     src_type: SrcType,
-    attack_type: AttackType,
+    attack_data: AttackData,
     dmgs: list[int],
     iscrit: bool,
 ):
     for effect in entity.effects:
-        effect.on_attack(target, src_type, attack_type, dmgs, iscrit)
+        effect.on_attack(target, src_type, attack_data, dmgs, iscrit)
 
 
 def execute_on_injured(
     entity: "Entity",
     fromwho: "Entity",
     src_type: SrcType,
-    attack_type: AttackType,
+    attack_data: AttackData,
     dmgs: list[int],
     iscrit: bool,
 ):
     for effect in entity.effects:
-        effect.on_injured(fromwho, src_type, attack_type, dmgs, iscrit)
+        effect.on_injured(fromwho, src_type, attack_data, dmgs, iscrit)
 
 
 def execute_on_kill(entity: "Entity", target: "Entity"):

@@ -1,4 +1,7 @@
+"剧情播放实用方法"
+
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 from tooldelta import utils, Player
 from .event_apis import PlayerTradingWithNPCEvent
@@ -94,17 +97,16 @@ def simple_actionbar_print(
     delay: float = 3,
 ) -> str:
     lettok = ""
-    c = 0
+    LIMIT = 40
     self = get_system()
+    aligner = self.bigchar.mctext.align
     with self.create_plotskip_detector(player) as ps:
         jumping = 0
-        for char in plot_texts:
-            c += 0.5 + 0.5 * (not char.isascii())
+        for char, width in aligner.yield_chars_and_length(plot_texts):
             lettok += char
             if char == "§":
                 continue
-            if c > 25:
-                c = 0
+            if (width // 12 + 1) % (LIMIT + 1) == 0:
                 lettok += "\n"
             if jumping > 0:
                 jumping -= 1
@@ -143,7 +145,7 @@ def plot_box_print(
 ):
     self = get_system()
     plot_refmt = ""
-    lntime = 0
+    lnchars = 0
     jumping = 0
     plot_printer_sfx = (None, "note.hat", "note.bit", "mob.villager.idle")[
         self.settings.get_player_setting(player, "plot_printer_sfx")
@@ -153,15 +155,17 @@ def plot_box_print(
             plot_refmt += char
             if char == "§":
                 continue
+            elif char == "\n":
+                lnchars = 0
             if char.isascii():
-                lntime += 0.5
+                lnchars += 0.5
             else:
-                lntime += 1
+                lnchars += 1
             if (
-                lntime > self.cfg["剧情设置"]["剧情对话框每行的最多字符数"]
+                lnchars > self.cfg["剧情设置"]["剧情对话框每行的最多字符数"]
                 and char not in ".，。？！（）"
             ):
-                lntime = 0
+                lnchars = 0
                 plot_refmt += "\n "
             if jumping:
                 jumping -= 1
@@ -469,7 +473,7 @@ def pprint(
     character_name: str,
     plot_text: str,
     spd: float = 8,
-    delay: float = 3,
+    delay: float = 1,
 ) -> str:
     return plot_box_print(player, character_name, plot_text, spd, delay)
 
@@ -496,6 +500,10 @@ def createOrigItem(tag_name: str):
     return item
 
 
+def getItemCount(player: Player, tag_name: str):
+    return get_system().rpg.api_holder.getItemCount(player, tag_name)
+
+
 def giveItem(player: Player, slotitem, amount=1, metadata=None):
     Item = get_system().rpg.backpack.Item
     SlotItem = get_system().rpg.backpack.SlotItem
@@ -503,13 +511,20 @@ def giveItem(player: Player, slotitem, amount=1, metadata=None):
         get_system().rpg.backpack_holder.giveItem(player, slotitem)
     elif isinstance(slotitem, Item):
         get_system().rpg.backpack_holder.giveItem(
-            player, SlotItem(slotitem, amount, metadata=metadata or {})
+            player,
+            createItem(slotitem.id, amount, metadata),  # avoid initial problems
         )
 
 
-def run_plot(player: Player, plot: "RegisteredPlot"):
+def clearItem(player: Player, tag_name: str, count: int = 1):
+    get_system().rpg.api_holder.clearItem(player, tag_name, count)
+
+
+def run_plot(
+    player: Player, plot: "RegisteredPlot", cb: Callable[[bool], None] | None = None
+):
     sys = get_system()
-    sys.running_plot_threads[player] = _run_plot(player, plot)
+    sys.running_plot_threads[player] = _run_plot(player, plot, cb)
 
 
 def get_favor(player: Player, plot_linkname: str):
@@ -522,13 +537,30 @@ def set_favor(player: Player, plot_linkname: str, favor: int):
     get_system().set_quest_point_data(player, plot_linkname, old)
 
 
-# 增加某个剧情点对应的好感度 (例如这个剧情节点对应一个 NPC)
 def add_favor(player: Player, plot_linkname: str, favor: int):
+    "增加某个剧情点对应的好感度 (例如这个剧情节点对应一个 NPC)"
     set_favor(player, plot_linkname, get_favor(player, plot_linkname) + favor)
 
 
+def send_mail(
+    player: Player,
+    sender: str,
+    title: str,
+    content: str,
+    with_items: dict[str, int] | None = None,
+):
+    maillib = get_system().mail
+    if sender == "system":
+        mail = maillib.make_system_mail(title, content, with_items)
+    else:
+        mail = maillib.make_virtual_mail(sender[1:], title, content, with_items)
+    maillib.send_mail(player, mail)
+
+
 @utils.thread_func("剧情执行")
-def _run_plot(player: Player, plot: "RegisteredPlot"):
+def _run_plot(
+    player: Player, plot: "RegisteredPlot", cb: Callable[[bool], None] | None = None
+):
     sys = get_system()
     _d, _x, _y, _z = player.getPos()
     sys.snowmenu.set_player_page(player, None)
@@ -553,6 +585,8 @@ def _run_plot(player: Player, plot: "RegisteredPlot"):
             sys.save_player_last_plot_position(player, None)
         del sys.running_plots[player]
         del sys.running_plot_threads[player]
+        if cb:
+            cb(exit_normal)
         if running_plot_final:
             return running_plot_final
         else:

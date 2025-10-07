@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import TYPE_CHECKING
-
-from tooldelta import utils, Player, InternalBroadcast
+from tooldelta import utils, Player
+from . import event_apis
 from .rpg_lib import constants, utils as rpg_utils
 
 if TYPE_CHECKING:
@@ -68,6 +68,20 @@ class SnowmenuGUI:
     ##### 菜单内配置物品等 #####
     @utils.thread_func("玩家配置主手物品")
     def _player_config_mainhand_weapon(self, player: Player):
+        def _modify_test(
+            index: int, slotitem: "SlotItem | None", err_fmt="无法切换武器: %s"
+        ):
+            cant_modify: str | None = rpg_utils.real_any(
+                self.sys.BroadcastEvent(
+                    event_apis.PlayerModifyWeaponEvent(
+                        player, index, slotitem
+                    ).to_broadcast()
+                )
+            )
+            if cant_modify:
+                self.sys.show_fail(player, err_fmt % cant_modify)
+            return cant_modify is not None
+
         old_mainhand_weapons_uuid = self.sys.player_holder.get_player_basic(
             player
         ).mainhand_weapons_uuid.copy()
@@ -158,15 +172,7 @@ class SnowmenuGUI:
                         )
                         if res1 is None:
                             raise SystemExit
-                        cant_equip: str | None = rpg_utils.real_any(
-                            self.sys.BroadcastEvent(
-                                InternalBroadcast(
-                                    "CRPG:WeaponEquip", (player, res_slot, res1)
-                                )
-                            )
-                        )
-                        if cant_equip:
-                            self.sys.show_fail(player, f"无法装备武器： {cant_equip}")
+                        if not _modify_test(res_slot, res1, "无法装备武器： %s"):
                             return
                         if res1.uuid in swap_item_uuids:
                             target_slot = old_mainhand_weapons_uuid.index(res1.uuid)
@@ -183,7 +189,6 @@ class SnowmenuGUI:
                             f"已将 §f<{res1.disp_name}§r§f> §a放入主手槽位",
                         )
                         self.sys.display_holder.display_weapon_to_player(player, res1)
-                        self.sys.tutor.check_point("自定义RPG:装备武器", player, res1)
                     else:
                         raise SystemExit
                 else:
@@ -216,17 +221,9 @@ class SnowmenuGUI:
                         match res:
                             case 0:
                                 # unload armor
-                                cant_unequip: str | None = rpg_utils.real_any(
-                                    self.sys.BroadcastEvent(
-                                        InternalBroadcast(
-                                            "CRPG:WeaponUnequip", (player, res_slot)
-                                        )
-                                    )
-                                )
-                                if cant_unequip:
-                                    self.sys.show_fail(
-                                        player, f"无法卸下武器： {cant_unequip}"
-                                    )
+                                if not _modify_test(
+                                    res_slot, None, "无法卸下武器： %s"
+                                ):
                                     return
                                 old_mainhand_weapons_uuid[res_slot] = None
                                 self.sys.show_succ(player, "已卸下槽位武器")
@@ -235,7 +232,6 @@ class SnowmenuGUI:
                                         self.game_ctrl.sendwocmd(
                                             f"replaceitem entity {player.safe_name} slot.hotbar {_slotid} air"
                                         )
-                                self.sys.tutor.check_point("自定义RPG:卸下武器", player)
                             case 1:
                                 # change armor
                                 swap_item_uuids = [
@@ -265,6 +261,8 @@ class SnowmenuGUI:
                                 )
                                 if res1 is None:
                                     raise SystemExit
+                                if not _modify_test(res_slot, res1):
+                                    return
                                 if res1.uuid in swap_item_uuids:
                                     old_mainhand_weapons_uuid[
                                         old_mainhand_weapons_uuid.index(res1.uuid)
@@ -312,12 +310,26 @@ class SnowmenuGUI:
     # 配置饰品
     @utils.thread_func("玩家配置饰品")
     def _player_config_armors_and_relics(self, player: Player):
+        enum = constants.ConfigPanelEnum
         self.game_ctrl.sendwscmd(f"/execute as {player.safe_name} at @s run tp ~~~ ~ 0")
+
+        def _modify_test(
+            index: int, slotitem: "SlotItem | None", err_fmt="无法切换饰品: %s"
+        ):
+            cant_modify: str | None = rpg_utils.real_any(
+                self.sys.BroadcastEvent(
+                    event_apis.PlayerModifyRelicEvent(
+                        player, index, slotitem
+                    ).to_broadcast()
+                )
+            )
+            if cant_modify:
+                self.sys.show_fail(player, err_fmt % cant_modify)
+            return cant_modify is not None
 
         def config_panel(
             player: Player, nowitem: "SlotItem | None", items: list["SlotItem"]
         ):
-            "Select 槽位为空 = 0, item; Select 卸下道具 = 1, item; Select 切换道具 = 2, item"
             self.game_ctrl.sendwscmd(
                 f"execute as {player.safe_name} at @s run playsound note.pling @s ~~~ 1 1.4"
             )
@@ -329,12 +341,12 @@ class SnowmenuGUI:
                     },
                 )
                 if res is None:
-                    return None
+                    return enum.NULL, None
                 else:
                     res = self.check_items(player, items)
                     if res is None:
-                        return None
-                    return 0, res
+                        return enum.NULL, None
+                    return enum.NEW_SLOTITEM, res
             else:
                 desc_format = nowitem.item.description(nowitem)  # type: ignore
                 opt_menu_pages = [
@@ -348,18 +360,20 @@ class SnowmenuGUI:
                 real_menu_pages = dict(enumerate(opt_menu_pages))
                 res = self.gui.simple_select_dict(player, real_menu_pages)
                 if res is None:
-                    return None
+                    return enum.NULL, None
                 elif res == 0:
-                    return 1, nowitem
+                    return enum.UNEQUIP_SLOTITEM, nowitem
                 elif res == 1:
                     res = self.check_items(player, items)
                     if res is None:
-                        return None
-                    return 2, res
+                        return enum.NULL, None
+                    return enum.MODIFY_SLOTITEM, res
+                else:
+                    raise ValueError("Invalid menu page")
 
         try:
             last_page = 0
-            while 1:
+            while True:
                 player_basic = self.sys.player_holder.get_player_basic(player)
                 shead, schest, slegs, sfeet = (
                     self.sys.backpack_holder.getItem(player, i)
@@ -397,9 +411,11 @@ class SnowmenuGUI:
                 utils.fill_list_index(armor_txts, ["", ""])
                 utils.fill_list_index(relic_txts, ["", ""])
 
-                def _menu_cb(_, page: int):
-                    if page >= 8:
-                        return None
+                output = ""
+                _last_page = -1
+
+                def _update(page: int):
+                    nonlocal output
                     empty = "§7空"
                     a0 = shead.disp_name if shead else empty
                     a1 = schest.disp_name if schest else empty
@@ -409,40 +425,74 @@ class SnowmenuGUI:
                     a5 = slB.disp_name if slB else empty
                     a6 = slC.disp_name if slC else empty
                     a7 = slD.disp_name if slD else empty
-                    alft = rpg_utils.align_left
+
+                    algn = self.sys.bigchar.mctext.align.align_simple
+
                     glc = rpg_utils.get_last_color
-                    T = 34
-                    T2 = 20
+                    T = 50
+                    T2 = 25
+                    S = 16
                     format_dict = {
                         f"a{i}": "§b" if page == i else "§7" for i in range(8)
                     }
-                    return (
-                        "§8··········§7--------========§f========"
+                    output = (
+                        "§8··················§7------------========§f========"
                         "<|§c§l配置饰品槽§r§f|>"
-                        "========§7========--------§8··········\n"
-                        "§8۞ §6护甲:§r"
-                        + "§7\n {a0}➭ 头盔 §f"
-                        + alft(a0, armor_txts[0][:T], T2)
-                        + "§7\n {a1}➭ 胸甲 §f"
-                        + alft(a1, glc(armor_txts[0][:T]) + armor_txts[0][T:], T2)
-                        + "§7\n {a2}➭ 护腿 §f"
-                        + alft(a2, armor_txts[1][:T], T2)
-                        + "§7\n {a3}➭ 护靴 §f"
-                        + alft(a3, glc(armor_txts[1][:T]) + armor_txts[1][T:], T2)
-                        + "§7\n§8۞ §d饰品:§r"
-                        + "§7\n {a4}➭ 天环 §f"
-                        + alft(a4, relic_txts[0][:T], T2)
-                        + "§7\n {a5}➭ 项链 §f"
-                        + alft(a5, glc(relic_txts[0][:T]) + relic_txts[0][T:], T2)
-                        + "§7\n {a6}➭ 戒指 §f"
-                        + alft(a6, relic_txts[1][:T], T2)
-                        + "§7\n {a7}➭ 腰带 §f"
-                        + alft(a7, glc(relic_txts[1][:T]) + relic_txts[1][T:], T2)
+                        "========§7========------------§8··················\n"
+                        "§8۞ §6护甲:§r\n"
+                        + algn(
+                            ("§7 {a0}➭ 头盔 §f", S), (a0, T2), armor_txts[0][:T]
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a1}➭ 胸甲 §f", S),
+                            (a1, T2),
+                            glc(armor_txts[0][:T]) + armor_txts[0][T:],
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a2}➭ 护腿 §f", S), (a2, T2), armor_txts[1][:T]
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a3}➭ 护靴 §f", S),
+                            (a3, T2),
+                            glc(armor_txts[1][:T]) + armor_txts[1][T:],
+                        ).removesuffix("§")
+                        + "\n§7§8۞ §d饰品:§r\n"
+                        + algn(
+                            ("§7 {a4}➭ 天环 §f", S), (a4, T2), relic_txts[0][:T]
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a5}➭ 项链 §f", S),
+                            (a5, T2),
+                            glc(relic_txts[0][:T]) + relic_txts[0][T:],
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a6}➭ 戒指 §f", S), (a6, T2), relic_txts[1][:T]
+                        ).removesuffix("§")
+                        + "\n"
+                        + algn(
+                            ("§7 {a7}➭ 腰带 §f", S),
+                            (a7, T2),
+                            glc(relic_txts[1][:T]) + relic_txts[1][T:],
+                        ).removesuffix("§")
                         + " §r\n"
                         "§a抬头选择 §f| §c低头退出 §f| §b扔雪球切换\n"
                     ).format(**format_dict)
 
-                res = self.gui.simple_select(player, _menu_cb, default_page=last_page)
+                def _disp(_, page: int):
+                    nonlocal output, _last_page
+                    if page >= 8:
+                        return None
+                    elif page != _last_page:
+                        _update(page)
+                        _last_page = page
+                    return output
+
+                res = self.gui.simple_select(player, _disp, default_page=last_page)
                 match res:
                     case 0 | 1 | 2 | 3:
                         temp_slots = [shead, schest, slegs, sfeet]
@@ -460,37 +510,28 @@ class SnowmenuGUI:
                                 [i.uuid for i in temp_slots if i],
                             )
                         )
-                        resp = config_panel(player, temp_slots[res], avaliable_items)
-                        if resp is None:
+                        _choice = config_panel(player, temp_slots[res], avaliable_items)
+                        if _choice[0] is enum.NULL:
+                            last_page = res
                             continue
-                        choice, item_need_op = resp
-                        if choice == 0:
-                            cant_equip = rpg_utils.real_any(
-                                self.sys.BroadcastEvent(
-                                    InternalBroadcast(
-                                        "CRPG:ArmorEquip", (player, res, resp[1])
-                                    )
-                                )
-                            )
-                            if cant_equip:
-                                self.sys.show_fail(
-                                    player, f"无法装备护甲： {cant_equip}"
-                                )
+                        choice, item_need_op = _choice
+                        if choice is enum.NEW_SLOTITEM:
+                            if not _modify_test(res, item_need_op, "无法装备护甲： %s"):
                                 continue
                             temp_slots[res] = item_need_op
                             self.sys.show_succ(
                                 player, f"已装备 {item_need_op.disp_name}"
                             )
-                            self.sys.tutor.check_point(
-                                "自定义RPG:装备护甲", player, item_need_op
-                            )
-                        elif choice == 1:
+                        elif choice is enum.UNEQUIP_SLOTITEM:
+                            if not _modify_test(res, None, "无法卸下护甲： %s"):
+                                continue
                             temp_slots[res] = None
                             self.sys.show_succ(
                                 player, f"已卸下 {item_need_op.disp_name}"
                             )
-                            self.sys.tutor.check_point("自定义RPG:卸下护甲", player)
-                        elif choice == 2:
+                        elif choice is enum.MODIFY_SLOTITEM:
+                            if not _modify_test(res, item_need_op, "无法切换护甲： %s"):
+                                continue
                             self.sys.show_succ(
                                 player,
                                 f"已将 {temp_slots[res].disp_name}§r§a 更换成 {item_need_op.disp_name}",  # type: ignore (always a item)
@@ -515,30 +556,33 @@ class SnowmenuGUI:
                                 [i.uuid for i in temp_slots if i],
                             )
                         )
-                        resp = config_panel(
+                        _choice = config_panel(
                             player, temp_slots[res - 4], avaliable_items
                         )
-                        if resp is None:
+                        if _choice[0] is enum.NULL:
+                            last_page = res
                             continue
-                        choice, item_need_op = resp
-                        if choice == 0:
+                        choice, item_need_op = _choice
+                        if choice is enum.NEW_SLOTITEM:
+                            if not _modify_test(res, item_need_op, "无法装备饰品： %s"):
+                                continue
                             temp_slots[res - 4] = item_need_op
                             self.sys.show_succ(
                                 player, f"已装备 {item_need_op.disp_name}"
                             )
-                            self.sys.tutor.check_point(
-                                "自定义RPG:装备饰品", player, item_need_op
-                            )
-                        elif choice == 1:
+                        elif choice is enum.UNEQUIP_SLOTITEM:
+                            if not _modify_test(res, None, "无法卸下饰品： %s"):
+                                continue
                             temp_slots[res - 4] = None
                             self.sys.show_succ(
                                 player, f"已卸下 {item_need_op.disp_name}"
                             )
-                            self.sys.tutor.check_point("自定义RPG:卸下饰品", player)
-                        elif choice == 2:
+                        elif choice is enum.MODIFY_SLOTITEM:
+                            if not _modify_test(res, item_need_op, "无法切换饰品： %s"):
+                                continue
                             self.sys.show_succ(
                                 player,
-                                f"已将 {temp_slots[res - 4].disp_name}§r§a 更换成 {item_need_op.disp_name}",  # type: ignore (always a item)
+                                f"已将 {temp_slots[res - 4].disp_name}§r§a 更换成 {item_need_op.disp_name}",  # type: ignore
                             )
                             temp_slots[res - 4] = item_need_op
                         player_basic.relics_uuid[4:] = [
@@ -596,7 +640,7 @@ class SnowmenuGUI:
         self.sys.display_holder.display_skill_cd_to_player(entity, force_update=True)
 
     @utils.thread_func("玩家检查面板")
-    def _player_check_panel_simple(self, player: Player):
+    def _player_check_panel_simple(self, player: Player, return_mainpage=True):
         playerinf = self.sys.player_holder.get_playerinfo(player)
         playerinf._update()
         hp_pc = playerinf.hp / playerinf.tmp_hp_max
@@ -617,7 +661,8 @@ class SnowmenuGUI:
         )
         self.gui.simple_select_dict(player, {0: page})
         player.setActionbar("§a")
-        self.gui.set_player_page(player, self.main_page)
+        if return_mainpage:
+            self.gui.set_player_page(player, self.main_page)
 
     # 向玩家发出物品选择请求并获取返回
     def check_items(

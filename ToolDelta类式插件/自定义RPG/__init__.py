@@ -17,6 +17,7 @@ from tooldelta import (
 )
 from tooldelta.constants import PacketIDS
 from . import (
+    api_holder,
     backpack_holder,
     display_holder,
     event_apis,
@@ -34,6 +35,8 @@ from .rpg_lib import (
     constants,
     default_cfg,
     formatter,
+    frame_effects,
+    frame_mobs,
     utils as rpg_utils,
     scripts_loader,
 )
@@ -63,6 +66,7 @@ from .rpg_lib.rpg_entities import (
 importlib.reload(scripts_loader)
 
 for module in (
+    api_holder,
     backpack_holder,
     display_holder,
     path_holder,
@@ -104,6 +108,8 @@ class CustomRPG(Plugin):
     constants = constants
     event_apis = event_apis
     formatter = formatter
+    frame_effects = frame_effects
+    frame_mobs = frame_mobs
 
     find_effect_class = staticmethod(find_effect_class)
     find_weapon_class = staticmethod(find_weapon_class)
@@ -111,8 +117,6 @@ class CustomRPG(Plugin):
     PlayerEntity = PlayerEntity
     ItemWeapon = ItemWeapon
     ItemRelic = ItemRelic
-    # 怪物死亡给予的充能值
-    MOB_DEATH_CHARGE = 5
 
     def __init__(self, frame):
         global SYSTEM
@@ -152,30 +156,30 @@ class CustomRPG(Plugin):
         self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
         self.rpg_settings = self.GetPluginAPI("自定义RPG-设置")
         self.rpg_quests = self.GetPluginAPI("自定义RPG-剧情与任务")
-        self.tutor = self.GetPluginAPI("自定义RPG-教程")
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
         self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
         self.snowmenu = self.GetPluginAPI("雪球菜单v3", (0, 0, 1))
         self.backpack = self.GetPluginAPI("虚拟背包")
         self.butils = self.GetPluginAPI("基本插件功能库")
+        self.pdstore = self.GetPluginAPI("玩家数据存储")
         if TYPE_CHECKING:
             global SlotItem, Item
             from ..前置_聊天栏菜单 import ChatbarMenu
             from ..前置_大字替换 import BigCharReplace
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
             from ..前置_基本插件功能库 import BasicFunctionLib
+            from ..前置_玩家数据存储 import PlayerDataStorer
             from ..雪球菜单v3 import SnowMenuV3
             from ..自定义RPG_升级系统 import CustomRPGUpgrade
             from ..自定义RPG_剧情与任务 import CustomRPGPlotAndTask
-            from ..自定义RPG_教程 import CustomRPGTutorial
             from ..自定义RPG_设置 import CustomRPGSettings
             from ..虚拟背包 import VirtuaBackpack
             from ..头衔系统 import Nametitle
 
             self.menu: ChatbarMenu
             self.ntag: Nametitle
-            self.tutor: CustomRPGTutorial
             self.cb2bot: TellrawCb2Bot
+            self.pdstore: PlayerDataStorer
             self.bigchar: BigCharReplace
             self.snowmenu: SnowMenuV3
             self.backpack: VirtuaBackpack
@@ -187,6 +191,7 @@ class CustomRPG(Plugin):
         Item = self.backpack.Item
 
         self.qq_holder = qq_holder.QQHolder(self)
+        self.api_holder = api_holder.APIHolder(self)
         self.menu_cmds = menu_cmds.MenuCommands(self)
         self.mob_holder = mob_holder.MobHolder(self)
         self.item_holder = item_holder.ItemHolder(self)
@@ -216,9 +221,11 @@ class CustomRPG(Plugin):
         self.logger.addHandler(fhdl)
 
     def if_kick_player(self, player: Player, sleep=False):
-        if player.name.startswith("NFull"):
+        if "龙头" in player.name or "最搞怪的涌涌" in player.name or "texet_bot" in player.name:
             self.game_ctrl.sendwocmd(f"kick {player.safe_name}")
             return True
+        if player.name == "SkyblueSuper":
+            return
         return False
         if (
             not player.is_op()
@@ -227,8 +234,8 @@ class CustomRPG(Plugin):
             if sleep:
                 time.sleep(3)
             self.game_ctrl.sendwocmd(
-                f"kick {player.safe_name} §a\n§7[§cError§7]\n§c抱歉， 租赁服暂未开放， 您无法获得进入资格。"
-                "\n§d您可以查看我们的交流Q 750432518 获得终测资讯。\n§6最新开启时间： 08-29 10： 00， "
+                f"kick {player.safe_name} §a\n§7[§cError§7]\n§c抱歉， 租赁服正在维护， 您无法获得进入资格。"
+                "\n§d您可以查看我们的交流Q 750432518 获得终测资讯。"
                 + time.strftime(
                     "§b当前 %y 年 %m 月 %d日 %H： %M： %S", time.localtime()
                 )
@@ -252,7 +259,6 @@ class CustomRPG(Plugin):
         self.on_timer_save_playerdatas()
         self.on_inject_2nd()
 
-    @utils.thread_func("自定义RPG:初始化")
     def on_inject_2nd(self):
         gamemode1s = [self.getPlayer(i) for i in game_utils.getTarget("@a[m=1]")]
         with RPG_Lock:
@@ -343,7 +349,7 @@ class CustomRPG(Plugin):
             self.init_game_player(player, init=True)
             basic = self.player_holder.get_player_basic(player)
             weapon_uuid = basic.mainhand_weapons_uuid[0]
-            titl = self.ntag.get_current_nametitle(player.name)
+            titl = self.ntag.get_current_nametitle(player)
             if titl is None:
                 format_title_text = ""
             else:
@@ -381,7 +387,7 @@ class CustomRPG(Plugin):
                     format_weapon_txt = f"提着 {weapon_item.disp_name} "
                 else:
                     format_weapon_txt = "提着 ??? "
-            titl = self.ntag.get_current_nametitle(player.name)
+            titl = self.ntag.get_current_nametitle(player)
             if titl is None:
                 format_title_text = ""
             else:
@@ -419,6 +425,7 @@ class CustomRPG(Plugin):
     def show_any(self, target: str | Player, prefix_color_id: str, msg: str):
         if isinstance(target, Player):
             target = target.safe_name
+        msg = msg.replace("\n", f"\n§r§{prefix_color_id}┃ ")
         textjson = {"rawtext": [{"text": f"§{prefix_color_id}┃ {msg}"}]}
         self.butils.sendaicmd(
             f"tellraw {target} {json.dumps(textjson, ensure_ascii=False)}"

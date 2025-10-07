@@ -251,6 +251,7 @@ class CustomRPGPlotAndTask(Plugin):
     "剧情播放实用方法"
     LegacyQuest = LegacyQuest
     RPGQuest = staticmethod(RPGQuest)
+    quest_loader = quest_loader
 
     def __init__(self, frame):
         super().__init__(frame)
@@ -325,37 +326,40 @@ class CustomRPGPlotAndTask(Plugin):
             self.name, CFG_STD, CFG_DEFAULT, self.version
         )
         self.ListenPreload(self.on_def, priority=-5)
-        self.ListenActive(self.on_inject)
+        self.ListenActive(self.on_inject, priority=-11)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
 
     def on_def(self):
+        self.bigchar = self.GetPluginAPI("大字替换", (0, 0, 1))
         self.intract = self.GetPluginAPI("前置-世界交互")
         self.interper = self.GetPluginAPI("ZBasic", force=False)
         self.snowmenu = self.GetPluginAPI("雪球菜单v3")
         self.rpg = self.GetPluginAPI("自定义RPG", force=False)
         self.chatbar = self.GetPluginAPI("聊天栏菜单")
-        self.tutor = self.GetPluginAPI("自定义RPG-教程")
         self.settings = self.GetPluginAPI("自定义RPG-设置")
         self.spx = self.GetPluginAPI("自定义RPG-特效")
+        self.mail = self.GetPluginAPI("蔚蓝空域邮箱")
         cb2bot = self.GetPluginAPI("Cb2Bot通信")
         if TYPE_CHECKING:
+            from ..前置_大字替换 import BigCharReplace
             from ..前置_世界交互 import GameInteractive
             from ..前置_聊天栏菜单 import ChatbarMenu
             from ..前置_Cb2Bot通信 import TellrawCb2Bot
             from ..ZBasic_Lang_中文编程 import ToolDelta_ZBasic
             from ..雪球菜单v3 import SnowMenuV3
+            from ..蔚蓝空域邮箱 import SkyblueMail
             from ..自定义RPG import CustomRPG
-            from ..自定义RPG_教程 import CustomRPGTutorial
             from ..自定义RPG_设置 import CustomRPGSettings
             from ..自定义RPG_特效 import FXStageShow
 
+            self.bigchar: BigCharReplace
             self.intract: GameInteractive
             self.interper: ToolDelta_ZBasic
             self.snowmenu: SnowMenuV3
+            self.mail: SkyblueMail
             self.rpg: CustomRPG
             self.chatbar: ChatbarMenu
-            self.tutor: CustomRPGTutorial
             self.settings: CustomRPGSettings
             self.spx: FXStageShow
             cb2bot: TellrawCb2Bot
@@ -414,6 +418,13 @@ class CustomRPGPlotAndTask(Plugin):
             self.force_remove_quest_record,
             op_only=True,
         )
+        self.chatbar.add_new_trigger(
+            [".rsetstate"],
+            [("状态名", str, None), ("状态值", bool, None)],
+            "强制设置自己的任务状态",
+            self.force_set_state,
+            op_only=True,
+        )
         self.snowmenu.register_main_page(self.handle_quests_menu, "任务列表")
         for player in self.frame.get_players().getAllPlayers():
             self.init_player(player)
@@ -442,6 +453,12 @@ class CustomRPGPlotAndTask(Plugin):
         player = self.game_ctrl.players.getPlayerByName(target)
         if player is None:
             self.print_war(f"{self.name}: 玩家 {target} 不存在")
+        elif (
+            self.rpg.pdstore.get_property(player, "bound_qqid", None) is None
+            and self.rpg.api_holder.get_player_basic(player).Level < 5
+        ):
+            player.show("§6你是不是还忘了点什么..\n不要妄图走捷径喔。")
+            return
         else:
             self._run_plot_by_trigger(player, plot_name_linker)
 
@@ -460,56 +477,68 @@ class CustomRPGPlotAndTask(Plugin):
     def handle_quests_menu(self, player: Player):
         quests = self.read_quests(player)
         sorted(quests, key=lambda x: x.priority, reverse=True)
+        output = ""
+        last_page = -1
+        quest_datas = self.read_quest_datas(player)
+        L = 14
+        aligner = self.bigchar.mctext.align
 
-        def quests_cb(_, page: int):
+        def update_disp(page: int):
             if len(quests) == 0:
                 return (
                     "§e§l任务列表 §6>>§r"
-                    + ("\n  §8┃" + " " * 50) * 4
-                    + "\n  §8┃"
-                    + " " * 10
-                    + "§f目前没有任何任务啦 ƪ(˘⌣˘)ʃ"
-                    + ("\n  §8┃" + " " * 50) * 5
+                    + ("\n  §8┃" + " " * 50)
+                    + "\n  §8┃"* (L // 2 - 1)
+                    + " " * 6
+                    + "§f目前没有任何任务啦 ƪ(˘⌣˘)ʃ 低头以退出"
+                    + "\n  §8┃"* (L // 2 - 1)
+                    + ("\n  §8┃" + " " * 50)
                 )
-            if page >= len(quests):
-                return None
-            output = "§e§l任务列表 §6>>§r"
-            quest_datas = self.read_quest_datas(player)
-            for i, quest in enumerate(quests):
-                priority = quest.priority
-                if priority == 3:
-                    priority_color = "§6"
-                elif priority == 2:
-                    priority_color = "§b"
-                else:
-                    priority_color = "§2"
-                qdata_dict = quest_datas.get(quest.tag_name, {})
-                output += (
-                    ("\n§b>§l §r" if i == page else "\n  ")
-                    + priority_color
+            left_texts = [
+                (
+                    ("§e> " if page == idx else "  ")
+                    + "§"
+                    + "2b6"[q.priority - 1]
                     + "┃ §f§l"
-                    + quest.disp_name
-                    + ("    §r§7< §a抬头提交此任务" if i == page else "§r")
-                    + "\n"
-                    + priority_color
-                    + "  ┃   §7"
-                    + "\n  ┃   ".join(
-                        acall(
-                            quest.description,
-                            player,
-                            qdata_dict,
-                        ).split("\n")
-                    )
-                    + (
-                        f"； §3前往坐标 §b{acall(quest.position, player, qdata_dict)}"
-                        if quest.position is not None
-                        else ""
-                    )
+                    + q.disp_name
                 )
-            output += ("\n  §8┃" + " " * 50) * (10 - output.count("\n"))
+                for idx, q in enumerate(quests)
+            ]
+            q = quests[page]
+            qdata_dict = quest_datas.get(q.tag_name, {})
+            right_texts = self.bigchar.mctext.align.cut_by_length(
+                f"§7§l[§fi§7] §e{q.disp_name}\n"
+                + acall(q.description, player, qdata_dict)
+                + (
+                    f"\n§3※ 前往坐标 §b{acall(q.position, player, qdata_dict)}\n"
+                    if q.position is not None
+                    else "\n"
+                )
+                + ("§d★ 该任务为自动提交" if q.detect_cb is None else "§2★ 该任务为手动提交"),
+                30,
+            )[:L]
+            left_texts += ["  §8┃"] * max(0, L - len(left_texts))
+            outputs: list[str] = []
+            for i in range(L):
+                if i < len(right_texts):
+                    outputs.append(
+                        aligner.align_simple((left_texts[i], 40), right_texts[i])
+                    )
+                else:
+                    outputs.append(left_texts[i])
+            outputs.insert(0, "§e§l任务列表 §6>>")
+            outputs.append("§b扔雪球切换 §7| §a抬头提交任务 §7| §c低头退出")
+            return "\n§r".join(outputs) + "\n§a\n§a"
+
+        def disp_cb(_, page: int):
+            nonlocal output, last_page
+            if page != last_page:
+                last_page = page
+                return (output := update_disp(page))
             return output
 
-        res = self.snowmenu.simple_select(player, quests_cb)
+
+        res = self.snowmenu.simple_select(player, disp_cb)
         if res is None:
             return False
         if res >= len(quests):
@@ -651,6 +680,15 @@ class CustomRPGPlotAndTask(Plugin):
         del o["quests_ok"][quest.tag_name]
         self.save_quest_datas(player, o)
         self.rpg.show_succ(player, "已移除任务记录")
+
+    def force_set_state(self, player: Player, args):
+        state, val = args
+        old_state = self.get_state(player, state, default=None)
+        if old_state is None:
+            self.rpg.show_fail(player, "状态不存在")
+            return
+        self.set_state(player, state, val)
+        self.rpg.show_succ(player, "已设置状态")
 
     @utils.thread_func("剧情执行")
     def _run_plot_by_trigger(self, player: Player, plot_name_linker: str):
@@ -854,7 +892,6 @@ class CustomRPGPlotAndTask(Plugin):
             del quest_datas[quest.tag_name]
         self.save_quest_datas(player, quest_datas)
         self.players_broadcast_evts_listeners[player].update()
-        self.tutor.check_point("自定义RPG-剧情与任务:完成任务", player, quest)
 
     def create_plotskip_detector(self, player: Player):
         return PlotSkipDetector(self, player)
@@ -1034,11 +1071,11 @@ class CustomRPGPlotAndTask(Plugin):
             del o["states"][name]
         utils.tempjson.load_and_write(path, o, need_file_exists=False)
 
-    def get_state(self, player: Player, name: str):
+    def get_state(self, player: Player, name: str, default: bool | None = False):
         path = self.format_general_data_path(player)
         o = utils.tempjson.load_and_read(path, need_file_exists=False, default={})
         o.setdefault("states", {})
-        return bool(o["states"].get(name))
+        return o["states"].get(name, default)
 
     def get_quest_point_datas(self, player: Player):
         path = self.format_general_data_path(player)

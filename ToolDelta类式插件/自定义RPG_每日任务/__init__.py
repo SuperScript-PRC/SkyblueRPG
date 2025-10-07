@@ -6,15 +6,14 @@ from tooldelta import (
     InternalBroadcast,
     TYPE_CHECKING,
 )
-from . import tasks, task_frame
+from . import task_frame, scripts_loader
 
 importlib.reload(task_frame)
-importlib.reload(tasks)
+importlib.reload(scripts_loader)
 
 from .task_frame import (
     DailyTasksManager,
-    BaseEvent,
-    get_task_classes_from_module,
+    BaseEvent
 )
 
 
@@ -28,12 +27,14 @@ class CustomRPGDailyTask(Plugin):
         self.ListenPreload(self.on_def)
         self.ListenPlayerJoin(self.on_player_join)
         self.ListenPlayerLeave(self.on_player_leave)
-        self.ListenActive(self.on_active)
+        self.ListenActive(self.on_active, priority=-11)
         self.ListenFrameExit(self.on_frame_exit)
         self.inited = False
+        (self.data_path / "玩家数据").mkdir(parents=True, exist_ok=True)
 
     def on_def(self):
         self.cb2bot = self.GetPluginAPI("Cb2Bot通信")
+        self.bigchar = self.GetPluginAPI("大字替换")
         self.rpg = self.GetPluginAPI("自定义RPG")
         self.rpg_upgrade = self.GetPluginAPI("自定义RPG-升级系统")
         self.rpg_repair = self.GetPluginAPI("自定义RPG-修补系统")
@@ -43,6 +44,7 @@ class CustomRPGDailyTask(Plugin):
         self.rpg_plot = self.GetPluginAPI("自定义RPG-剧情与任务")
         if TYPE_CHECKING:
             from 前置_Cb2Bot通信 import TellrawCb2Bot
+            from 前置_大字替换 import BigCharReplace
             from 自定义RPG import CustomRPG
             from 自定义RPG_升级系统 import CustomRPGUpgrade
             from 自定义RPG_修补系统 import CustomRPGRepair
@@ -52,6 +54,7 @@ class CustomRPGDailyTask(Plugin):
             from 自定义RPG_剧情与任务 import CustomRPGPlotAndTask
 
             self.cb2bot: TellrawCb2Bot
+            self.bigchar: BigCharReplace
             self.rpg: CustomRPG
             self.rpg_upgrade: CustomRPGUpgrade
             self.rpg_repair: CustomRPGRepair
@@ -59,7 +62,7 @@ class CustomRPGDailyTask(Plugin):
             self.rpg_food: CustomRPGFood
             self.rpg_source: CustomRPGSource
             self.rpg_plot: CustomRPGPlotAndTask
-        self.tasks = get_task_classes_from_module(self, tasks)
+        self.tasks = scripts_loader.load_all(self)
         self.cb2bot.regist_message_cb("sr.dailytasks.query", self.on_list_tasks)
         self.print(f"§a加载了 {len(self.tasks)} 个每日任务点")
         self.init_broadcast_listeners()
@@ -98,7 +101,7 @@ class CustomRPGDailyTask(Plugin):
             v.recv_event(event)
 
     def format_player_data_path(self, player: Player):
-        return self.data_path / (player.xuid + ".json")
+        return self.data_path / "玩家数据" / (player.xuid + ".json")
 
     def on_list_tasks(self, datas: list[str]):
         playername = datas[0]

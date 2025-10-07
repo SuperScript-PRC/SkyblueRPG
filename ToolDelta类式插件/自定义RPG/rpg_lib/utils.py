@@ -115,7 +115,11 @@ def make_subscript_number(num: int):
 
 def make_effect_icons(who: "Entity"):
     return " ".join(
-        [i.icon + "§r§f" + make_subscript_number(i.level) for i in who.effects]
+        [
+            i.icon + "§r§f" + make_subscript_number(i.level)
+            for i in who.effects
+            if i.visible
+        ]
     )
 
 

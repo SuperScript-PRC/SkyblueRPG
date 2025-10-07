@@ -6,6 +6,7 @@ import random
 from tooldelta import utils
 from tooldelta.game_utils import getTarget, getScore
 from . import event_apis
+from .rpg_lib.constants import AttackData, AttackType
 from .rpg_lib.frame_mobs import find_mob_class_by_id, find_mob_class_by_tagname
 from .rpg_lib.frame_effects import RPGEffect
 from .rpg_lib.rpg_entities import MobEntity, PlayerEntity
@@ -116,7 +117,9 @@ class MobHolder:
                 "sr:ms_type", "@e[scores={sr:ms_uuid=" + mob_uuid + "},c=1]"
             )
         except ValueError as err:
-            self.sys.print_war(f"无法获取 UUID 为 {mob_uuid} 的生物的信息: {err}, 已清除生物")
+            self.sys.print_war(
+                f"无法获取 UUID 为 {mob_uuid} 的生物的信息: {err}, 已清除生物"
+            )
             self.sys.game_ctrl.sendwocmd(f"kill @e[scores={{sr:ms_uuid={mob_uuid}}}]")
             return
         # 对于重新载入的生物, 重新分配 RuntimeID
@@ -290,9 +293,13 @@ class MobHolder:
         mob_runtimeid = dic.get("mob_runtimeid")
         # with RPG_Lock:
         if mob_type is None:
-            self.sys.print_err(f"尝试生成未知类型的生物 (uuid={mob_uuid}, runtimeid={mob_runtimeid})")
+            self.sys.print_err(
+                f"尝试生成未知类型的生物 (uuid={mob_uuid}, runtimeid={mob_runtimeid})"
+            )
             if mob_uuid is not None:
-                self.sys.game_ctrl.sendwocmd("kill @e[scores={sr:ms_uuid=" + mob_uuid + "}]")
+                self.sys.game_ctrl.sendwocmd(
+                    "kill @e[scores={sr:ms_uuid=" + mob_uuid + "}]"
+                )
             return
         elif mob_uuid is None:
             self.sys.print("出现 UUID 为空的怪物; 正在处理")
@@ -324,10 +331,10 @@ class MobHolder:
             func(killer, mob.cls.type_id, mob.uuid)
         expdrag_min, expdrag_max = mob.cls.drop_exp_range
         exp_added = random.choice(range(expdrag_min, expdrag_max))
-        self.sys.game_ctrl.sendwocmd(
-            f"kill @e[scores={{sr:ms_uuid={mob.uuid}}}] "
-        )
-        if isinstance(killer, PlayerEntity):
+        self.sys.game_ctrl.sendwocmd(f"kill @e[scores={{sr:ms_uuid={mob.uuid}}}] ")
+        evt = event_apis.MobDiedEvent(mob)
+        self.sys.BroadcastEvent(evt.to_broadcast())
+        if evt.drop and isinstance(killer, PlayerEntity):
             evt = event_apis.PlayerKillMobEvent(killer, mob)
             self.sys.BroadcastEvent(evt.to_broadcast())
             if evt.drop_exp:
@@ -367,6 +374,26 @@ class MobHolder:
             f"tag @e[scores={{sr:ms_rtid={runtimeid}}}] add sr.mob_uninited"
         )
 
+    def uninit_uuid_lost_mob(self):
+        self.sys.game_ctrl.sendwocmd(
+            r"scoreboard players add @e[tag=sr.mob] sr:ms_type 0"
+        )
+        self.sys.game_ctrl.sendwscmd_with_resp(
+            r"scoreboard players add @e[tag=sr.mob] sr:ms_uuid 0"
+        )
+        self.sys.game_ctrl.sendwocmd(
+            r"kill @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=0}]"
+        )
+        self.sys.game_ctrl.sendwocmd(
+            r"tag @e[tag=sr.mob,scores={sr:ms_uuid=0,sr:ms_type=1..}] add sr.mob_uninited"
+        )
+
     @staticmethod
     def find_mob_class_by_id(mob_type: int):
         return find_mob_class_by_id(mob_type)
+
+    def kill_mob_by_runtimeid(self, runtime_id: int):
+        if e := self.sys.entity_holder.get_entity_by_runtimeid(runtime_id):
+            e.ready_died(e, AttackData(attack_type=AttackType.OTHER))
+        else:
+            self.sys.game_ctrl.sendwocmd(f"kill @e[scores={{sr:ms_rtid={runtime_id}}}]")

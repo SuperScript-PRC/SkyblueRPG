@@ -292,7 +292,7 @@ class DungeonStage:
         self.apis = sys.rpg.event_apis
         self.start_time = time.time()
         self.last_flush_time = time.time()
-        self.instage_mobs = []
+        self.instage_mob_rtids: set[int] = set()
         self.phase = 1
         self.phase_mobs_amount = 0
         self.final_phase = len(self.d.summoned_mobs)
@@ -301,14 +301,14 @@ class DungeonStage:
         x, y, z = self.d.center_pos
         self.player.setTitle(f"波次 {self.phase}/{self.final_phase}")
         # TODO: summon 可能报错
-        uds = utils.thread_gather(
+        rtids = utils.thread_gather(
             [
                 (self.sys.rpg_mobs.summon, (mt, x, y, z))
                 for mt in self.d.summoned_mobs[self.phase - 1]
             ]
         )
-        self.instage_mobs = uds
-        self.phase_mobs_amount = len(uds)
+        self.instage_mob_rtids = set(rtids)
+        self.phase_mobs_amount = len(rtids)
 
     def finish_current_phase(self):
         if self.phase < self.final_phase:
@@ -325,12 +325,14 @@ class DungeonStage:
 
     def finish(self, fntype: DungeonFinishType):
         if not fntype.win:
-            for mob_runtimeid in self.instage_mobs:
+            for mob_runtimeid in self.instage_mob_rtids:
                 mob = self.sys.rpg.mob_holder.get_mob_by_runtimeid(mob_runtimeid)
                 if mob:
-                    mob.ready_died(mob, self.sys.rpg.constants.AttackType.OTHER)
+                    mob.ready_died(mob, self.sys.rpg.constants.AttackData())
                 else:
-                    self.sys.print_war(f"无法通过 RuntimeID {mob_runtimeid} 找到并清除怪物")
+                    self.sys.print_war(
+                        f"无法通过 RuntimeID {mob_runtimeid} 找到并清除怪物"
+                    )
         if fntype is not DungeonFinishType.FRAME_EXIT:
             self.d.player_finish(self.sys, self.player, fntype)
 
@@ -339,28 +341,33 @@ class DungeonStage:
 
     def on_event(
         self,
-        evt: "rpg_event_apis.PlayerAttackMobEvent | rpg_event_apis.MobAttackPlayerEvent | rpg_event_apis.PlayerKillMobEvent | rpg_event_apis.MobKillPlayerEvent",
+        evt: "rpg_event_apis.PlayerAttackMobEvent | rpg_event_apis.MobAttackPlayerEvent | rpg_event_apis.MobDiedEvent | rpg_event_apis.PlayerDiedEvent",
     ):
         a = self.apis
-        if (
+        if isinstance(evt, a.PlayerDiedEvent):
+            if evt.player.player is not self.player:
+                return
+        elif isinstance(evt, a.MobDiedEvent):
+            if evt.mob.runtime_id not in self.instage_mob_rtids:
+                return
+        elif (
             evt.player.player is not self.player
-            or evt.mob.runtime_id not in self.instage_mobs
+            or evt.mob.runtime_id not in self.instage_mob_rtids
         ):
             return
         if isinstance(evt, a.PlayerAttackMobEvent | a.MobAttackPlayerEvent):
             self.last_flush_time = time.time()
-        elif isinstance(evt, a.PlayerKillMobEvent):
-            evt.cancel_dropexp()
-            evt.cancel_dropitem()
-            self.instage_mobs.remove(evt.mob.runtime_id)
+        elif isinstance(evt, a.MobDiedEvent):
+            evt.cancel_drop()
+            self.instage_mob_rtids.remove(evt.mob.runtime_id)
             self.sys.rpg.show_any(
-                evt.player.player,
+                self.player,
                 "6",
-                f"§c剩余§e{len(self.instage_mobs)}/{self.phase_mobs_amount}§c个怪物",
+                f"§c剩余§e{len(self.instage_mob_rtids)}/{self.phase_mobs_amount}§c个怪物",
             )
-            if not self.instage_mobs:
+            if not self.instage_mob_rtids:
                 self.finish_current_phase()
-        elif isinstance(evt, a.MobKillPlayerEvent):
+        elif isinstance(evt, a.PlayerDiedEvent):
             self.finish(DungeonFinishType.FINISH_FAIL)
 
     def ticking(self, ntime: float):

@@ -7,11 +7,17 @@ from tooldelta import Plugin, plugin_entry, Player, TYPE_CHECKING, cfg, utils
 class Recipe:
     inputs: dict[str, int]
     outputs: dict[str, int]
+    backpack_limit: dict[str, int]
 
-    def can_craft(
-        self,
-        player: Player,
-    ):
+    def upto_limit_item(self, player: Player):
+        if not self.backpack_limit:
+            return None
+        for item_tagname, limit in self.backpack_limit.items():
+            if entry.rpg.backpack_holder.getItemCount(player, item_tagname) >= limit:
+                return entry.rpg.backpack_holder.getItems(player, item_tagname)
+        return None
+
+    def can_craft(self, player: Player):
         hdr = entry.rpg.backpack_holder
         needs_and_have = {
             k: (v, hdr.getItemCount(player, k)) for k, v in self.inputs.items()
@@ -28,13 +34,15 @@ class Recipe:
         can_craft = all(have >= need for need, have in needs_and_have.values())
         outputs = {ihdr.getOrigItem(k).force_disp(): v for k, v in self.outputs.items()}
         inputs_str = "+".join(
-            f"§f{disp_name}§r§7x[{'§' + 'ac'[have < need]}{have}§7/{need}]"
+            f"§f{disp_name}§r§7({'§' + 'ac'[have < need]}{have}§7/{need})"
             for disp_name, (need, have) in needs_and_have.items()
         )
         outputs_str = "+".join(
             f"§f{disp_name}§r§7x{amount}" for disp_name, amount in outputs.items()
         )
-        return f"§7[{('§cx', '§a√')[can_craft]}§7] " + inputs_str + "§f➪" + outputs_str
+        return (
+            f"§7[{('§cx', '§a√')[can_craft]}§7] " + inputs_str + " §f➪ " + outputs_str
+        )
 
     def craft(self, player: Player):
         for item_id, amount in self.inputs.items():
@@ -87,6 +95,9 @@ class CustomRPGCrafting(Plugin):
                                     {
                                         "输入": cfg.AnyKeyValue(cfg.PInt),
                                         "输出": cfg.AnyKeyValue(cfg.PInt),
+                                        cfg.KeyGroup("最多持有"): cfg.AnyKeyValue(
+                                            cfg.PInt
+                                        ),
                                     }
                                 )
                             )
@@ -105,6 +116,7 @@ class CustomRPGCrafting(Plugin):
                                 Recipe(
                                     recipe["输入"],
                                     recipe["输出"],
+                                    recipe.get("最多持有", {}),
                                 )
                             )
         self.print(
@@ -149,7 +161,7 @@ class CustomRPGCrafting(Plugin):
                         if elem is None:
                             elem = "无"
                         output_line += (
-                            ("§b" if x1 == _x and y1 == _y else "§8")
+                            ("§b" if x1 == _x and y1 == _y else "§7")
                             + elem
                             + " " * (12 - simple_calc_len(elem))
                             + " " * 2
@@ -186,7 +198,7 @@ class CustomRPGCrafting(Plugin):
                                     if elem is None:
                                         elem = "--"
                                     output_line += (
-                                        ("§b" if x2 == _x and y2 == _y else "§8")
+                                        ("§b" if x2 == _x and y2 == _y else "§7")
                                         + elem
                                         + " " * (12 - simple_calc_len(elem))
                                         + " " * 2
@@ -242,7 +254,7 @@ class CustomRPGCrafting(Plugin):
                                         output += "§r§8"
                                         for _ in range(10 - len(selected_recipes)):
                                             output += "\n--"
-                                        output += "§c左划退出 §a扔雪球确定 §6上下划动屏幕进行选择"
+                                        output += "\n§c左划退出 §a扔雪球确定 §6上下划动屏幕进行选择"
                                         match menu.wait_next_action(output):
                                             case action.UP:
                                                 y3 = (y3 - 1) % max_section
@@ -260,6 +272,14 @@ class CustomRPGCrafting(Plugin):
                                                     self.rpg.show_fail(
                                                         player,
                                                         "无法进行合成， 材料不足",
+                                                    )
+                                                    continue
+                                                elif i := recipe.upto_limit_item(
+                                                    player
+                                                ):
+                                                    self.rpg.show_fail(
+                                                        player,
+                                                        f"无法进行合成， 背包内 §f{i[0].disp_name} §c数量溢出",
                                                     )
                                                     continue
                                                 recipe.craft(player)

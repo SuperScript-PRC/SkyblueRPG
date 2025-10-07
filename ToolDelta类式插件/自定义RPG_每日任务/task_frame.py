@@ -9,8 +9,9 @@ if TYPE_CHECKING:
 
 
 class DailyTask(metaclass=ABCMeta):
-    disp_name: str = "<未知每日任务>"
-    points: int = 12
+    def __init_subclass__(cls, disp_name: str, points: int = 12):
+        cls.disp_name = disp_name
+        cls.points = points
 
     @staticmethod
     @abstractmethod
@@ -28,6 +29,10 @@ class DailyTask(metaclass=ABCMeta):
     @abstractmethod
     def OnEvent(self, event: "BaseEvent", player: Player):
         raise NotImplementedError
+
+    @classmethod
+    def CanBeAdded(cls, player: Player):
+        return True
 
     @abstractmethod
     def Display(self) -> str:
@@ -86,9 +91,12 @@ class DailyTasksManager:
             default={},
         )
         if self.datas.get("last-flush-day", 0) != nowday():
+            chosen_tasks = [
+                i for i in self.sys.tasks.values() if i.CanBeAdded(self.player)
+            ]
             self.tasks = [
                 t(self, self.player, self.datas.get(t.name, {}))
-                for t in choice_tasks(list(self.sys.tasks.values()))
+                for t in choice_tasks(chosen_tasks)
             ]
             self.points = 0
             self.datas["last-flush-day"] = nowday()
@@ -114,10 +122,23 @@ class DailyTasksManager:
     def display(self):
         self.sys.rpg.show_any(self.player, "d", "正在进行的每日任务：")
         for task in self.tasks:
-            self.sys.rpg.show_inf(self.player, "  " + task.display_as_line())
+            self.sys.rpg.show_inf(
+                self.player,
+                " §7₊"
+                + self.sys.bigchar.small_number(task.points)
+                + "§f "
+                + task.display_as_line(),
+            )
         a = int(self.points / 64 * 30)
         self.sys.rpg.show_any(
-            self.player, "d", "活跃值： §a" + "·" * a + "§7" + "·" * (30 - a)
+            self.player,
+            "d",
+            "活跃值： §a"
+            + "·" * a
+            + "§7"
+            + "·" * (30 - a)
+            + f" §a{self.points}§7/"
+            + self.sys.bigchar.small_number(64),
         )
 
     def add_points(self, points: int):

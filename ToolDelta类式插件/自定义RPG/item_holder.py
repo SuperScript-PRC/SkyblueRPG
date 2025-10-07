@@ -92,6 +92,8 @@ class ItemHolder:
                 o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '--')}>"
                 if slotitem.metadata.get("trash", False):
                     o += "§7<§cX§7>"
+                if slotitem.metadata.get("srpg:rogue_item"):
+                    o += "§c[映像世界]"
                 return o
 
             return _weapon_name_wrapper
@@ -141,6 +143,8 @@ class ItemHolder:
                 o = f"{name}§r§f<Lv.{slotitem.metadata.get('Lv', '--')}>"
                 if slotitem.metadata.get("trash", False):
                     o += "§7<§cX§7>"
+                if slotitem.metadata.get("srpg:rogue_item"):
+                    o += "§c[映像世界]"
                 return o
 
             return _relic_name_wrapper

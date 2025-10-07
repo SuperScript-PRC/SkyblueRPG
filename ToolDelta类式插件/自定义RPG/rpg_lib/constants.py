@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Literal
 
@@ -12,6 +13,9 @@ STARLEVEL = Literal[1, 2, 3, 4, 5]
 # 默认玩家数据
 DEFAULT_SPAWNPOINT = [0, -64, 0]
 DEFAULT_HP_MAX = 100
+
+# 怪物死亡所加充能
+MOB_DEATH_CHARGE = 5
 
 
 # 伤害来源
@@ -147,10 +151,18 @@ class AttackType(IntEnum):
     NON_SHIELD = 1
     # 真实攻击 (无视护甲, 减伤效果等)
     REAL = 2
-    # 效果
-    EFFECT = 3
     # 其他类型
-    OTHER = 4
+    OTHER = 3
+
+    @property
+    def ignore_shield(self):
+        return self == AttackType.NON_SHIELD or self == AttackType.REAL
+
+
+@dataclass
+class AttackData:
+    attack_type: AttackType = AttackType.NORMAL
+    is_aoe: bool = False
 
 
 # buff 的类型
@@ -307,3 +319,10 @@ class EffectTarget(IntEnum):
     PLAYER = 0
     MOB = 1
     BOTH = 2
+
+
+class ConfigPanelEnum(IntEnum):
+    NULL = -1
+    NEW_SLOTITEM = 0
+    UNEQUIP_SLOTITEM = 1
+    MODIFY_SLOTITEM = 2

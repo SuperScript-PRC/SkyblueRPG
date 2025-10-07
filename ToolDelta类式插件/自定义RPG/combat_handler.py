@@ -49,6 +49,9 @@ class CombatHandler:
             return False
         weapon = playerinf.weapon
         if not weapon.need_skill_set:
+            self.sys.BroadcastEvent(
+                event_apis.PlayerUseSkillEvent(playerinf).to_broadcast()
+            )
             playerinf.skill_use(None)
         else:
             if playerinf.is_ult_set:
@@ -59,7 +62,6 @@ class CombatHandler:
                 )
             playerinf.player.setTitle("§a", "§a\n§a技能已准备, 请攻击以选定目标")
             playerinf.is_skill_set = True
-            self.sys.tutor.check_point("自定义RPG:选中技能", playerinf.player)
         self.display_holder.display_charge_to_player(playerinf)
         return True
 
@@ -71,6 +73,9 @@ class CombatHandler:
             return False
         weapon = playerinf.weapon
         if not weapon.need_ult_set:
+            self.sys.BroadcastEvent(
+                event_apis.PlayerUseUltEvent(playerinf).to_broadcast()
+            )
             playerinf.ult_use(None)
         else:
             if playerinf.is_skill_set:
@@ -81,7 +86,6 @@ class CombatHandler:
                 )
             playerinf.player.setTitle("§c", "§d\n§d终结技已准备, 请攻击以选定目标")
             playerinf.is_ult_set = True
-            self.sys.tutor.check_point("自定义RPG:选中终结技", playerinf.player)
         return True
 
     # 玩家使用技能
@@ -93,8 +97,10 @@ class CombatHandler:
         if cd_time := self.sys.item_holder.get_weapon_skill_cd(item_hot):
             self.sys.show_fail(playerinf.player, f"技能正在冷却 ({cd_time}s)")
         else:
+            self.sys.BroadcastEvent(
+                event_apis.PlayerUseSkillEvent(playerinf).to_broadcast()
+            )
             playerinf.skill_use(target)
-            self.sys.tutor.check_point("自定义RPG:使用技能", playerinf.player)
         self.display_holder.display_charge_to_player(playerinf)
         self.entity_holder.update_last_hp(playerinf)
         if target is not None:
@@ -109,8 +115,10 @@ class CombatHandler:
             self.sys.display_holder.clear_player_skill_and_ult_setter(playerinf.player)
             return False
         if item_hot.chg == item_hot.charge_ult:
+            self.sys.BroadcastEvent(
+                event_apis.PlayerUseUltEvent(playerinf).to_broadcast()
+            )
             playerinf.ult_use(target)
-            self.sys.tutor.check_point("自定义RPG:使用终结技", playerinf.player)
         else:
             self.sys.show_fail(playerinf.player, "充能不足")
         self.display_holder.display_charge_to_player(playerinf)
@@ -122,10 +130,15 @@ class CombatHandler:
 
     # 玩家攻击实体
     def player_attack_mob(self, playerinf: PlayerEntity, mob: MobEntity):
+        mob.update_last_game_hurted()
         atks, is_crit, _ = playerinf.attack(mob)
         self.BroadcastEvent(
             event_apis.PlayerAttackMobEvent(
-                playerinf, mob, constants.AttackType.NORMAL, atks, is_crit
+                playerinf,
+                mob,
+                constants.AttackData(attack_type=constants.AttackType.NORMAL),
+                atks,
+                is_crit,
             ).to_broadcast()
         )
         self.ensure_kill_handler(playerinf, mob)
@@ -141,17 +154,23 @@ class CombatHandler:
         mob = self.mob_holder.load_mobinfo(mob_uuid)
         if mob is None:
             self.sys.print_war(
-                f"SkyblueRPG: 实体 [{mob_uuid}] 所属实体类型未知, 无法初始化"
+                f"SkyblueRPG: 实体 {mob_uuid} 所属实体类型未知, 无法初始化"
             )
             return
         playerinf = self.player_holder.get_playerinfo(player)
         self.entity_holder.set_main_target(playerinf, mob)
+        playerinf.update_last_game_hurted()
         atks, _, _ = mob.attack(
-            playerinf, constants.SrcType.NORMAL, constants.AttackType.NORMAL
+            playerinf,
+            constants.SrcType.NORMAL,
+            constants.AttackData(attack_type=constants.AttackType.NORMAL),
         )
         self.BroadcastEvent(
             event_apis.MobAttackPlayerEvent(
-                playerinf, mob, constants.AttackType.NORMAL, atks
+                playerinf,
+                mob,
+                constants.AttackData(attack_type=constants.AttackType.NORMAL),
+                atks,
             ).to_broadcast()
         )
         if playerinf.exists:
@@ -172,10 +191,15 @@ class CombatHandler:
                 "§4✗ §c对方未开启 PVP 模式， 可在菜单设置内打开"
             )
             return
+        playerinf_2.update_last_game_hurted()
         atks, is_crit, _ = playerinf.attack(playerinf_2)
         self.BroadcastEvent(
             event_apis.PlayerAttackPlayerEvent(
-                playerinf, playerinf_2, constants.AttackType.NORMAL, atks, is_crit
+                playerinf,
+                playerinf_2,
+                constants.AttackData(attack_type=constants.AttackType.NORMAL),
+                atks,
+                is_crit,
             ).to_broadcast()
         )
         self.entity_holder.update_last_hp(playerinf)
@@ -190,16 +214,10 @@ class CombatHandler:
     #     if isinstance(killer, PlayerEntity):
     #         if killed.is_died():
     #             if isinstance(killed, MobEntity):
-    #                 self.sys.tutor.check_point(
-    #                     "自定义RPG:击杀生物", killer.player, killed
-    #                 )
     #                 self.BroadcastEvent(
     #                     event_apis.PlayerKillMobEvent(killer, killed).to_broadcast()
     #                 )
     #             elif isinstance(killed, PlayerEntity):
-    #                 self.sys.tutor.check_point(
-    #                     "自定义RPG:击杀玩家", killer.player, killed
-    #                 )
     #                 self.BroadcastEvent(
     #                     event_apis.PlayerKillPlayerEvent(killer, killed).to_broadcast()
     #                 )

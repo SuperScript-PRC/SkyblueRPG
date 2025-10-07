@@ -89,7 +89,7 @@ class CustomRPGSettings(Plugin):
     def __init__(self, frame):
         super().__init__(frame)
         self.ListenPreload(self.on_def)
-        self.ListenActive(self.on_inject)
+        self.ListenActive(self.on_inject, priority=-13)
         self.settings_changed_listeners: dict[
             str, list[Callable[[Player, int], None]]
         ] = {}

@@ -156,9 +156,9 @@ class CustomRPGUpgrade(Plugin):
 
         match self.snowmenu.simple_select(player, _cb):
             case 0:
-                self.upgrade_weapon(player)
+                self.player_upgrade_weapon(player)
             case 1:
-                self.upgrade_relic(player)
+                self.player_upgrade_relic(player)
             case 2:
                 return
 
@@ -199,20 +199,20 @@ class CustomRPGUpgrade(Plugin):
         return metadata
 
     def on_upgrade_weapon(self, player: Player):
-        self.upgrade_weapon(player)
+        self.player_upgrade_weapon(player)
         self.rpg.player_holder.update_playerentity_from_basic(
             self.rpg.player_holder.get_player_basic(player),
             self.rpg.player_holder.get_playerinfo(player),
         )
 
     def on_upgrade_relic(self, player: Player):
-        self.upgrade_relic(player)
+        self.player_upgrade_relic(player)
         self.rpg.player_holder.update_playerentity_from_basic(
             self.rpg.player_holder.get_player_basic(player),
             self.rpg.player_holder.get_playerinfo(player),
         )
 
-    def upgrade_weapon(self, player: Player) -> None:
+    def player_upgrade_weapon(self, player: Player) -> None:
         rpg = self.rpg
         constants = rpg.constants
         rpg.player_holder.dump_mainhand_weapon_datas_to_slotitem(
@@ -279,14 +279,14 @@ class CustomRPGUpgrade(Plugin):
                     return
             material_count_left = material.count
             # 开始升级
-            while 1:
+            while True:
                 output_text = ""
                 material_count = 0
                 # 用于展示升级前后的物品
                 item_weapon_upgrade_fake = rpg.ItemWeapon.load_from_item(
                     item_orig.orig_copy()
                 )
-                while 1:
+                while True:
                     # 单次循环使用1个材料提供经验值
                     # 直到物品消耗完或者等级无法再提升
                     breakMode = False
@@ -299,7 +299,7 @@ class CustomRPGUpgrade(Plugin):
                         item_weapon_upgrade_fake.exp
                         + upgrade_cofig.available_upgrade_materials[material.item.id]
                     )
-                    while 1:
+                    while True:
                         # 检测经验增加后等级是否可以晋阶
                         # 晋阶导需要特殊物品晋阶时即停止
                         # 或者等级达到最大值时停止
@@ -376,7 +376,7 @@ class CustomRPGUpgrade(Plugin):
                     )
                     break
                 elif resp == 2:
-                    while 1:
+                    while True:
                         player.show("§7请重新输入§f花费材料的数量§7:")
                         resp = utils.try_int(player.input())
                         if resp is None or resp == 0:
@@ -448,7 +448,7 @@ class CustomRPGUpgrade(Plugin):
             )
             rpg.show_succ(player, "物品晋阶成功， 可以继续升级")
 
-    def upgrade_relic(self, player: Player) -> None:
+    def player_upgrade_relic(self, player: Player) -> None:
         rpg = self.rpg
         constants = rpg.constants
         storlist = rpg.backpack_holder.list_player_store_with_filter(
@@ -464,6 +464,12 @@ class CustomRPGUpgrade(Plugin):
                 constants.HiddenCategory.RELICD,
             ],
         )
+        storlist = [
+            x
+            for x in storlist
+            if (m := self.rpg.find_relic_class(x.id).upgrade_mode)
+            and x.metadata.get("Lv", 0) < m.max_level
+        ]
         if storlist:
             section = rpg.snowmenu_gui.check_items(
                 player,
@@ -528,7 +534,7 @@ class CustomRPGUpgrade(Plugin):
             # 开始升级
             # 统计各词条升级次数
             subprops_upgrade_total = {}
-            while 1:
+            while True:
                 material_count = 0
                 upgrade_need_exp_fake = 0
                 item_relic_upgrade_fake = self.rpg.ItemRelic.load_from_item(
@@ -537,7 +543,7 @@ class CustomRPGUpgrade(Plugin):
                 output_text = ""
                 # 额外材料
                 extra_mateterials: tuple["Item", int] | None = None
-                while 1:
+                while True:
                     # 使用1个材料提供经验值
                     breakMode = False
                     if material_count_left <= 0:
@@ -548,7 +554,7 @@ class CustomRPGUpgrade(Plugin):
                         item_relic_upgrade_fake.exp
                         + upgrade_cofig.available_upgrade_materials[material.item.id]
                     )
-                    while 1:
+                    while True:
                         # 检测经验增加后等级是否可以晋阶
                         upgrade_need_exp_fake = upgrade_cofig.upgrade_exp_syntax(
                             item_relic_upgrade_fake.level
@@ -643,7 +649,7 @@ class CustomRPGUpgrade(Plugin):
                     rpg.show_inf(player, "已取消升级")
                     return
                 elif resp == 2:
-                    while 1:
+                    while True:
                         player.show("§7请重新输入§f花费材料的数量§7:")
                         resp = utils.try_int(player.input())
                         if resp is None or resp == 0:
@@ -678,7 +684,7 @@ class CustomRPGUpgrade(Plugin):
                                     ),
                                 )
                             )
-                    while 1:
+                    while True:
                         item_selected = rpg.snowmenu_gui.check_items(
                             player,
                             allowed_direct_items,
@@ -788,6 +794,17 @@ class CustomRPGUpgrade(Plugin):
                 self.rpg.show_inf(player, "已取消晋阶.")
                 return
 
+    def upgrade_weapon_to_specific_level(
+        self, item_orig: "SlotItem", target_level: int
+    ):
+        item_weapon = self.rpg.ItemWeapon.load_from_item(item_orig)
+        item_weapon.level = target_level
+        return self.update_weapon_by_level(item_weapon).dump_item()
+
+    def upgrade_relic_to_specific_level(self, item_orig: "SlotItem", target_level: int):
+        item_relic = self.rpg.ItemRelic.load_from_item(item_orig)
+        return self.update_relic_by_level(item_relic, target_level).dump_item()
+
     def make_progress_bar(self, long: int, total: int, current: int):
         act = round(current / total * long)
         char = "="
@@ -817,6 +834,26 @@ class CustomRPGUpgrade(Plugin):
             upgrade_mode.upgrade_value_syntax(atk, item_level)
             for atk in weapon.basic_atks
         ]
+        return item
+
+    def update_relic_by_level(
+        self,
+        item: "ItemRelic",
+        target_level: int,
+        extra_mateterials: tuple["SlotItem", int] | None = None,
+    ):
+        "Warning: 升级饰品后其副词条将自动随机分配"
+        relic = self.rpg.find_relic_class(item.slotItem.item.id)
+        upgrade_cofig = relic.upgrade_mode
+        if upgrade_cofig is None:
+            return item
+        for _ in range(item.level, target_level + 1):
+            item, _ = self.relic_upgrade_once(
+                item,
+                upgrade_cofig,
+                extra_mateterials,
+            )
+        item.level = target_level
         return item
 
     def relic_upgrade_once(
@@ -929,7 +966,7 @@ class CustomRPGUpgrade(Plugin):
         now_exp = dat_now.Exp
         now_lv = dat_now.Level
         now_exp += exp
-        while 1:
+        while True:
             levelup_exp = self.get_levelup_exp(dat_now)
             if now_exp >= levelup_exp:
                 now_lv += 1

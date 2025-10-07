@@ -170,7 +170,9 @@ class CustomRPGSource(Plugin):
         x = src_point.x
         y = src_point.y
         z = src_point.z
-        if (
+        if not self.can_repick(nearest, src_point):
+            nearest.setActionbar("§4✗ §c你暂时不能继续采集这处资源， 请把它留给其他人吧")
+        elif (
             src_point.hard <= 1
             or self.collect_status.get((x, y, z), (0, 0))[0] >= src_point.hard
         ):
@@ -344,7 +346,8 @@ class CustomRPGSource(Plugin):
                 )
             self.record_player_last_pick(player, point)
         else:
-            self.rpg.rpg_upgrade.add_player_exp(player, 1)
+            self.print(f"{player.name} 试图采集已采集资源")
+            return
         structure_name = f"res-{x}-{y}-{z}"
         resp = self.game_ctrl.sendwscmd_with_resp(
             f"structure save {structure_name} {x} {y} {z} {x} {y} {z} false disk"

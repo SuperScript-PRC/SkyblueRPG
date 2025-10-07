@@ -3,7 +3,7 @@ from weakref import ref
 from .constants import (
     RelicType,
     SrcType,
-    AttackType,
+    AttackData,
     ModelType,
     WeaponType,
     PropVal,
@@ -25,13 +25,10 @@ if 0:
 
 # 道具
 class Weapon:
-
     def __init_subclass__(
         cls,
         show_name: str = "<未命名道具>",
         description: str = "无描述",
-        skill_description: str = "无",
-        ult_description: str = "无",
         star_level: STARLEVEL = 3,
         category: WeaponType = WeaponType.SWORD,
         default_durability: int = 200,
@@ -47,8 +44,6 @@ class Weapon:
     ):
         cls.show_name = show_name
         cls.description = description
-        cls.skill_description = skill_description
-        cls.ult_description = ult_description
         cls.star_level = star_level
         cls.category = category
         cls.default_durability = default_durability
@@ -153,6 +148,14 @@ class Weapon:
             raise ValueError("Owner ref lost")
         return o
 
+    @property
+    def skill_desc(self):
+        return "暂无介绍"
+
+    @property
+    def ult_desc(self):
+        return "暂无介绍"
+
 
 # 饰品
 class Relic:
@@ -187,7 +190,7 @@ class Relic:
         self,
         target: "Entity",
         src_type: SrcType,
-        attack_type: AttackType,
+        attack_data: AttackData,
         atks: list[int],
         is_crit: bool,
     ):
@@ -197,7 +200,7 @@ class Relic:
         self,
         fromwho: "Entity",
         src_type: SrcType,
-        attack_type: AttackType,
+        attack_data: AttackData,
         atks: list[int],
         is_crit: bool,
     ):
@@ -330,7 +333,7 @@ def execute_on_attack(
     playerinf: "PlayerEntity",
     target: "Entity",
     src_type: SrcType,
-    attack_type: AttackType,
+    attack_data: AttackData,
     atks: list[int],
     is_crit: bool,
 ):
@@ -339,7 +342,7 @@ def execute_on_attack(
         if relic:
             cb = relic.on_attack
             if cb.__func__ not in cbs:
-                cb(target, src_type, attack_type, atks, is_crit)
+                cb(target, src_type, attack_data, atks, is_crit)
                 cbs.append(cb.__func__)
 
 
@@ -347,7 +350,7 @@ def execute_on_injured(
     playerinf: "PlayerEntity",
     fromwho: "Entity",
     src_type: SrcType,
-    attack_type: AttackType,
+    attack_data: AttackData,
     atks: list[int],
     is_crit: bool,
 ):
@@ -356,7 +359,7 @@ def execute_on_injured(
         if relic:
             cb = relic.on_injured
             if cb.__func__ not in cbs:
-                cb(fromwho, src_type, attack_type, atks, is_crit)
+                cb(fromwho, src_type, attack_data, atks, is_crit)
                 cbs.append(cb.__func__)
 
 

@@ -48,7 +48,6 @@ class DisplayHolder:
                 " slot.hotbar 2 gold_ingot 1 755 "
                 r'{"item_lock":{"mode":"lock_in_slot"}}'
             )
-            self.sys.tutor.check_point("自定义RPG:终结技充能完成", playerinf.player)
         else:
             self.display_progress_by_durability_bar(
                 playerinf.player,
@@ -79,7 +78,6 @@ class DisplayHolder:
                 )
             elif weapon_cd == 1 or (force_update and weapon_cd == 0):
                 # 刚刚好准备退出cd模式
-                self.sys.tutor.check_point("自定义RPG:技能冷却完成", playerinf.player)
                 self.sys.game_ctrl.sendwocmd(
                     f"/replaceitem entity {playerinf.player.safe_name} slot.hotbar 1 iron_ingot 1 755 "
                     + r'{"item_lock":{"mode":"lock_in_slot"}}'

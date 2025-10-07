@@ -1,11 +1,12 @@
 from enum import Enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from tooldelta import InternalBroadcast
+from tooldelta import InternalBroadcast, Player
 
-from .rpg_lib.constants import AttackType
+from .rpg_lib.constants import AttackData
 
 if TYPE_CHECKING:
+    from . import SlotItem
     from .rpg_lib.rpg_entities import PlayerEntity, MobEntity
 
 
@@ -21,6 +22,10 @@ class BroadcastType(str, Enum):
     PLAYER_SET_ULT = "rpg:PlayerSetUlt"
     PLAYER_USE_ULT = "rpg:PlayerUseUlt"
     MOB_INITED = "rpg:MobInited"
+    PLAYER_DIED = "rpg:PlayerDied"
+    MOB_DIED = "rpg:MobDied"
+    PLAYER_MODIFY_WEAPON = "rpg:PlayerModifyWeapon"
+    PLAYER_MODIFY_RELIC = "rpg:PlayerModifyRelic"
 
 
 class BaseEvent:
@@ -35,7 +40,7 @@ class BaseEvent:
 class PlayerAttackMobEvent(BaseEvent):
     player: "PlayerEntity"
     mob: "MobEntity"
-    attack_type: AttackType
+    attack_data: AttackData
     damages: list[int]
     is_crit: bool
     type = BroadcastType.PLAYER_ATTACK_MOB
@@ -45,7 +50,7 @@ class PlayerAttackMobEvent(BaseEvent):
 class MobAttackPlayerEvent(BaseEvent):
     player: "PlayerEntity"
     mob: "MobEntity"
-    attack_type: AttackType
+    attack_data: AttackData
     damages: list[int]
     type = BroadcastType.MOB_ATTACK_PLAYER
 
@@ -54,7 +59,7 @@ class MobAttackPlayerEvent(BaseEvent):
 class PlayerAttackPlayerEvent(BaseEvent):
     player: "PlayerEntity"
     target: "PlayerEntity"
-    attack_type: AttackType
+    attack_data: AttackData
     damages: list[int]
     is_crit: bool
     type = BroadcastType.PLAYER_ATTACK_PLAYER
@@ -93,3 +98,61 @@ class PlayerKillPlayerEvent(BaseEvent):
 class MobInitedEvent(BaseEvent):
     mob: "MobEntity"
     type = BroadcastType.MOB_INITED
+
+
+@dataclass
+class MobDiedEvent(BaseEvent):
+    mob: "MobEntity"
+    type = BroadcastType.MOB_DIED
+    drop = True
+
+    def cancel_drop(self):
+        self.drop = False
+
+
+@dataclass
+class PlayerDiedEvent(BaseEvent):
+    player: "PlayerEntity"
+    type = BroadcastType.PLAYER_DIED
+
+
+@dataclass
+class PlayerUseSkillEvent(BaseEvent):
+    player: "PlayerEntity"
+    type = BroadcastType.PLAYER_USE_SKILL
+
+
+# @dataclass
+# class PlayerSetSkillEvent(BaseEvent):
+#     player: "PlayerEntity"
+#     type = BroadcastType.PLAYER_SET_SKILL
+
+
+@dataclass
+class PlayerUseUltEvent(BaseEvent):
+    player: "PlayerEntity"
+    type = BroadcastType.PLAYER_USE_ULT
+
+
+# @dataclass
+# class PlayerSetUltEvent(BaseEvent):
+#     player: "PlayerEntity"
+#     type = BroadcastType.PLAYER_SET_ULT
+
+
+@dataclass
+class PlayerModifyWeaponEvent(BaseEvent):
+    player: Player
+    index: int
+    slotitem: "SlotItem | None"
+    type = BroadcastType.PLAYER_MODIFY_WEAPON
+    "接收道事件之后返回字符串可以阻止装备武器并返回原因"
+
+
+@dataclass
+class PlayerModifyRelicEvent(BaseEvent):
+    player: Player
+    index: int
+    slotitem: "SlotItem | None"
+    type = BroadcastType.PLAYER_MODIFY_RELIC
+    "接收道事件之后返回字符串可以阻止装备饰品并返回原因"

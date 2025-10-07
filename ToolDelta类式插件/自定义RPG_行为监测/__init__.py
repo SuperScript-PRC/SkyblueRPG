@@ -112,7 +112,7 @@ class CustomRPGActionListener(Plugin):
                 status = self.statuses[entity] = EntityStatus()
             else:
                 status = self.statuses[entity]
-        # self.print(evt.name, entity.name)
+        # # self.print(evt.name, entity.name)
         match evt:
             case Event.INTO_WATER:
                 status.in_water = True

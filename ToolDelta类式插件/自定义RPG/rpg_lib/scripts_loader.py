@@ -35,11 +35,11 @@ def load_scripts(system: "CustomRPG", base_folder: Path, register: Callable[[Mod
 
 def load_all(sys: "CustomRPG"):
     for dirname, loader in (
-        ("武器脚本", frame_objects.register_weapon_module),
         ("饰品脚本", frame_objects.register_relic_module),
         ("效果脚本", frame_effects.register_effect_module),
         ("实体脚本", frame_mobs.register_mob_module),
         ("附魔脚本", frame_enchants.register_enchant_module),
+        ("武器脚本", frame_objects.register_weapon_module),
     ):
         os.makedirs(sys.data_path / dirname, exist_ok=True)
         load_scripts(sys, sys.data_path / dirname, loader)
